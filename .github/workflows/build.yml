@@ -42,6 +42,7 @@ jobs:
                 python_ver: '3.13'
                 spec: 'main.spec'
                 requirements: 'src/notepadpypp/requirements.txt'
+                options: --onefile, --name "NotepadPyqq"
 
             - name: Compress (Windows)
               if: runner.os == 'Windows'
