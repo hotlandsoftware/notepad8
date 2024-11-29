@@ -65,7 +65,7 @@ jobs:
                 repo_token: ${{ secrets.GITHUB_TOKEN }}
                 file: NotepadPypp-Windows-amd64.zip
                 asset_name: NotepadPypp-Windows-amd64.zip
-                tag: ${{ github.ref }}
+                tag: nppypp-prototype
                 prerelease: true
                 overwrite: true
             
@@ -76,6 +76,6 @@ jobs:
                 repo_token: ${{ secrets.GITHUB_TOKEN }}
                 file: 'NotepadPypp-Linux-amd64.tar.gz'
                 asset_name: NotepadPypp-Linux-amd64.tar.gz
-                tag: ${{ github.ref }}
+                tag: nppypp-prototype
                 prerelease: true
                 overwrite: true
