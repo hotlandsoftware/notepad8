@@ -8,7 +8,7 @@ def get_config_path():
         config_dir = os.path.join(appdata, "NotepadPypp")
     else: # unix
         home = os.path.expanduser("~")
-        config_dir = os.path.join(home, "config", "NotepadPypp")
+        config_dir = os.path.join(home, ".config", "NotepadPypp")
 
     os.makedirs(config_dir, exist_ok=True)
 
