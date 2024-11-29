@@ -181,8 +181,17 @@ class NotepadPy(QMainWindow):
         editor.dragEnterEvent = dragEnterEvent
         editor.dropEvent = dropEvent
 
-        editor.setMarginLineNumbers(0, True)
-        editor.setMarginWidth(0, "0000")
+        def update_margin_width():
+            """Dynamically adjust the width of the margin based on the number of lines in the open document."""
+            total_lines = max(1, editor.lines())
+            digits = len(str(total_lines))
+            margin_width = editor.fontMetrics().horizontalAdvance("0") * digits + 6
+            editor.setMarginWidth(0, f"{margin_width}px")
+
+        update_margin_width()
+
+        editor.linesChanged.connect(update_margin_width)
+        editor.textChanged.connect(update_margin_width)
 
         font = QFont(scintilla_config.get("font", "Courier New"), scintilla_config.get("font_size", 12))
         font.setFixedPitch(True)
