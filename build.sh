@@ -1,2 +1,2 @@
 #/bin/bash
-pyinstaller main.spec
+pyinstaller --onefile --name "NotepadPyqq" src/notepadpypp/main.py --additional-hooks-dir=hooks

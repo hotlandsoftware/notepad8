@@ -53,4 +53,7 @@ jobs:
               run: |
                 mkdir hooks
                 copy "C:\hostedtoolcache\windows\Python\3.11.9\x64\Lib\site-packages\PyInstaller\hooks\hook-PyQt6.Qsci.py" hooks\
-                pyinstaller --additional-hooks-dir=hooks main.spec
+
+            - name: Run Pyinstaller
+              run: | 
+                pyinstaller --onefile --name "NotepadPyqq" src/notepadpypp/main.py --additional-hooks-dir=hooks
