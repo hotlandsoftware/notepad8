@@ -41,39 +41,13 @@ jobs:
                 pip install -r src/notepadpypp/requirements.txt
                 pip install pyinstaller
                 pyinstaller main.spec
-
-            - name: Compress (Windows)
-              if: runner.os == 'Windows'
-              run: |
-                mkdir release
-                move dist\* release\
-                tar -a -c -f NotepadPypp-Windows-amd64.zip release
-             
-            - name: Compress (Linux)
-              if: runner.os == 'Linux'
-              run: |
-                mkdir release
-                mv dist/* release/
-                tar -czvf NotepadPypp-Linux-amd64.tar.gz release
             
-            - name: Upload release (Windows)
-              if: runner.os == 'Windows'
-              uses: svenstaro/upload-release-action@v2
-              with:
-                repo_token: ${{ secrets.GITHUB_TOKEN }}
-                file: NotepadPypp-Windows-amd64.zip
-                asset_name: NotepadPypp-Windows-amd64.zip
-                tag: nppypp-prototype
-                prerelease: true
-                overwrite: true
-            
-            - name: Upload release (Linux)
+            - name: Debug why the hell its not including the Qsci hook (Linux)
               if: runner.os == 'Linux'
-              uses: svenstaro/upload-release-action@v2
-              with:
-                repo_token: ${{ secrets.GITHUB_TOKEN }}
-                file: 'NotepadPypp-Linux-amd64.tar.gz'
-                asset_name: NotepadPypp-Linux-amd64.tar.gz
-                tag: nppypp-prototype
-                prerelease: true
-                overwrite: true
+              run: | 
+                ls /opt/hostedtoolcache/Python/3.11.10/x64/lib/python3.11/site-packages/PyInstaller/hooks
+            
+            - name: Debug why the hell its not including the Qsci hook (Windows)
+              if: runner.os == 'Windows'
+              run: | 
+                dir C:\\hostedtoolcache\\windows\\Python\\3.11.9\\x64\\Lib\\site-packages\\PyInstaller\\hooks
