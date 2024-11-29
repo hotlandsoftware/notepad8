@@ -1,0 +1,17 @@
+name: NotepadPy++ Build
+
+on:
+    push:
+        branches: [master]
+
+jobs:
+    testing:
+        runs-on: ${{ matrix.os }}
+
+        strategy:
+            matrix:
+                os: [ubuntu-latest, windows-latest]
+
+        steps:
+            - run: |
+                echo "hello world"
