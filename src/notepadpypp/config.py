@@ -1,8 +1,20 @@
 import os
 import json
 
-# Get absolute path for the config file (TODO: change this to the tmp directory instead)
-CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.json")
+def get_config_path():
+    """Determines the configuration path, based on the OS"""
+    if os.name == 'nt': # Windows
+        appdata = os.getenv('APPDATA', os.path.expanduser("~\\AppData\\Roaming"))
+        config_dir = os.path.join(appdata, "NotepadPypp")
+    else: # unix
+        home = os.path.expanduser("~")
+        config_dir = os.path.join(home, "config", "NotepadPypp")
+
+    os.makedirs(config_dir, exist_ok=True)
+
+    return os.path.join(config_dir, "config.json")
+
+CONFIG_PATH = get_config_path()
 
 DEFAULT_CONFIG = {
     "wordWrap": False, # Use word wrapping
