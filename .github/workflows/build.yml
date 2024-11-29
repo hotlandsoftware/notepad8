@@ -13,10 +13,32 @@ jobs:
                 os: [ubuntu-latest, windows-latest]
 
         steps:
+            - name: Checkout repository
+              uses: actions/checkout@v3
+
+            - name: Install QT (Ubuntu)
+              uses: jurplel/install-qt-action@v4
+              if: runner.os == 'Linux'
+              with:
+                version: '6.8.0'
+                host: 'linux'
+                target: 'desktop'
+                arch: 'linux_gcc_64'
+                install-deps: 'true'
+
+            - name: Install QT (Windows)
+              uses: jurplel/install-qt-action@v4
+              if: runner.os == 'Windows'
+              with:
+                version: '6.8.0'
+                host: 'windows'
+                target: 'desktop'
+                arch: 'win64_msvc2022_64'
+                install-deps: 'true'
+                
             - name: Build executable
               uses: sayyid5416/pyinstaller@v1
               with:
                 python_ver: '3.13'
                 spec: 'main.spec'
                 requirements: 'src/notepadpypp/requirements.txt'
-                options: --onefile, --windowed,
