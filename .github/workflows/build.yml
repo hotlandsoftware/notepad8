@@ -36,23 +36,8 @@ jobs:
                 arch: 'win64_msvc2022_64'
                 install-deps: 'true'
                 
-            - name: Setup pyinstaller
+            - name: Setup and run pyinstaller
               run: |
                 pip install -r src/notepadpypp/requirements.txt
                 pip install pyinstaller
-
-            - name: Copy Hooks (Linux)
-              if: runner.os == 'Linux'
-              run: |
-                mkdir -p hooks
-                cp /opt/hostedtoolcache/Python/3.11.10/x64/lib/python3.11/site-packages/PyInstaller/hooks/hook-PyQt6.Qsci.py hooks/
-
-            - name: Copy Hooks (Windows)
-              if: runner.os == 'Windows'
-              run: |
-                mkdir hooks
-                copy "C:\hostedtoolcache\windows\Python\3.11.9\x64\Lib\site-packages\PyInstaller\hooks\hook-PyQt6.Qsci.py" hooks\
-
-            - name: Run Pyinstaller
-              run: | 
-                pyinstaller --onefile --name "NotepadPyqq" src/notepadpypp/main.py --additional-hooks-dir=hooks
+                pyinstaller --onefile --name "NotepadPyqq" src/notepadpypp/main.py --hidden-import=PyQt6.Qsci
