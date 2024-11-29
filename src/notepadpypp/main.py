@@ -8,6 +8,7 @@ from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QFileDialog, QMessageBox, 
     QTabWidget, QInputDialog, QDialog, QMenuBar
 )
+from PyQt6.QtCore import QCoreApplication, Qt
 from PyQt6.QtPrintSupport import QPrinter, QPrintDialog
 from PyQt6.QtNetwork import QLocalServer, QLocalSocket
 from PyQt6.Qsci import QsciScintilla, QsciLexer
@@ -38,6 +39,10 @@ class NotepadPy(QMainWindow):
         self.tabs.tabCloseRequested.connect(self.close_tab)
         self.tabs.currentChanged.connect(self.update_title_on_tab_change)
         self.setCentralWidget(self.tabs)
+
+        # for some reason, native dialogs in KDE do NOT work using pyinstaller. I don't know why yet.
+        # For now, I've compromised by disabling native file dialogs by default (can be enabled back in config.json)
+        QCoreApplication.setAttribute(Qt.ApplicationAttribute.AA_DontUseNativeDialogs, self.config.get("useQtDialogs", True))
 
         self.create_menu_bar()
 
@@ -231,7 +236,6 @@ class NotepadPy(QMainWindow):
         
     def open_file(self):
         file_path, _ = QFileDialog.getOpenFileName(self, "Open File", "", "All types (*)")
-
         if file_path:
             for editor, path in self.file_paths.items():
                 if path == file_path:
@@ -281,7 +285,7 @@ class NotepadPy(QMainWindow):
                     file.write(editor.text())
                 self.set_tab_file_path(editor, file_path)
                 self.modified_tabs[editor] = False
-                
+
                 self.update_tab_title(editor, file_path)
                 self.update_title()
             except Exception as e:
