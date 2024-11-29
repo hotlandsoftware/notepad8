@@ -40,6 +40,7 @@ jobs:
               uses: sayyid5416/pyinstaller@v1
               with:
                 python_ver: '3.13'
+                spec: 'main.spec'
                 requirements: 'src/notepadpypp/requirements.txt'
                 options: --onefile, --name "NotepadPyqq" src/notepadpypp/main.py
 
