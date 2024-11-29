@@ -46,7 +46,6 @@ jobs:
               run: |
                 mkdir -p hooks
                 cp /opt/hostedtoolcache/Python/3.11.10/x64/lib/python3.11/site-packages/PyInstaller/hooks/hook-PyQt6.Qsci.py hooks/
-                pyinstaller --additional-hooks-dir=hooks main.spec 
 
             - name: Copy Hooks (Windows)
               if: runner.os == 'Windows'
