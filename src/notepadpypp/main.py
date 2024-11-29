@@ -281,7 +281,9 @@ class NotepadPy(QMainWindow):
                     file.write(editor.text())
                 self.set_tab_file_path(editor, file_path)
                 self.modified_tabs[editor] = False
+                
                 self.update_tab_title(editor, file_path)
+                self.update_title()
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Failed to save file!:\n{str(e)}")
                 
