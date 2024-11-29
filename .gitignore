@@ -1,3 +1,5 @@
 # generated files
 src/notepadpypp/config.json
 src/notepadpypp/__pycache__
+dist/
+build/
