@@ -36,6 +36,7 @@ class NotepadPy(QMainWindow):
         self.tabs = QTabWidget(self)
         self.tabs.setTabsClosable(True)
         self.tabs.setMovable(not self.config.get("lockTabs", False))
+        self.setAcceptDrops(True)
         self.tabs.tabCloseRequested.connect(self.close_tab)
         self.tabs.currentChanged.connect(self.update_title_on_tab_change)
         self.setCentralWidget(self.tabs)
@@ -54,7 +55,7 @@ class NotepadPy(QMainWindow):
         file_menu = menu_bar.addMenu("File")
         file_actions = [
             ("New", "Ctrl+N", self.new_file, "icons/new.png"),
-            ("Open", "Ctrl+O", self.open_file, "icons/open.png"),
+            ("Open", "Ctrl+O", self.open_file_dialog, "icons/open.png"),
             ("Save", "Ctrl+S", self.save_current_file, "icons/save.png"),
             ("Save As", "Ctrl+Shift+S", self.save_current_file_as, "icons/save_as.png"),
             ("Print", "Ctrl+P", self.print_file, "icons/print.png"),
@@ -162,6 +163,21 @@ class NotepadPy(QMainWindow):
     def create_editor(self, content="", file_name=""):
         editor = QsciScintilla()
         scintilla_config = self.config.get("scintillaConfig", {})
+
+        # drag and drop support
+        editor.setAcceptDrops(True)
+        def dragEnterEvent(event):
+            if event.mimeData().hasUrls():
+                event.acceptProposedAction()
+        
+        def dropEvent(event):
+            for url in event.mimeData().urls():
+                file_path = url.toLocalFile()
+                if file_path:
+                    self.open_file_by_path(file_path)
+
+        editor.dragEnterEvent = dragEnterEvent
+        editor.dropEvent = dropEvent
         
         # editor settings
         editor.setMarginLineNumbers(0, True)
@@ -229,40 +245,55 @@ class NotepadPy(QMainWindow):
                 self.tabs.setTabText(current_tab_index, f"*{current_tab_name}")
             self.update_title()
 
+    # new file
     def new_file(self):
         new_tab_title = f"new {self.new_file_counter}"
         self.new_file_counter += 1
         self.add_new_tab(title=new_tab_title)
-        
-    def open_file(self):
+    
+    # open file (by path)
+    def open_file_by_path(self, file_path): 
+        """Opens a file by a path."""
+        if not file_path:
+            return
+
+        for editor, path in self.file_paths.items():
+            if path == file_path:
+                QMessageBox.critical(
+                    self, "Error", f"The file {os.path.basename(file_path)} is already open"
+                )
+                return 
+
+        try:
+            with open(file_path, "r", encoding="utf-8") as file:
+                content = file.read()
+                editor = self.add_new_tab(content, os.path.basename(file_path), file_name=file_path)
+                editor.setText(content)
+                editor.setModified(False)
+
+                # Set language for the file
+                lexer_class = get_lexer_for_file(file_path)
+                if lexer_class:
+                    for language, cls in LANGUAGES.items():
+                        if cls == lexer_class:
+                            self.set_language(language)
+                            break
+                else:
+                    self.set_language("None")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to open file '{file_path}':\n{str(e)}")
+
+    # open file dialog
+    def open_file_dialog(self):
+        """Opens the file dialog."""
         file_path, _ = QFileDialog.getOpenFileName(self, "Open File", "", "All types (*)")
         if file_path:
-            for editor, path in self.file_paths.items():
-                if path == file_path:
-                    QMessageBox.critical(
-                        self, "Error", f"The file {os.path.basename(file_path)} is already open"
-                    )
-                    return
-            try:
-                with open(file_path, "r", encoding="utf-8") as file:
-                    content = file.read()
-                    editor = self.add_new_tab(content, os.path.basename(file_path), file_name=file_path)
-                
-                    editor.setText(content)
-                    editor.setModified(False)
+            self.open_file_by_path(file_path)
 
-                    # set language for the file
-                    lexer_class = get_lexer_for_file(file_path)
-                    if lexer_class:
-                        for language, cls in LANGUAGES.items():
-                            if cls == lexer_class:
-                                self.set_language(language)
-                                break
-                    else:
-                        self.set_language("None")
-                        editor.setModified(False)
-            except Exception as e:
-                QMessageBox.critical(self, "Error", f"Failed to open file!:\n{str(e)}")
+    # open file (dropped)
+    def open_dropped_file(self, file_path):
+        """Handles a file dropped into Notepadpypp."""
+        self.open_file_by_path(file_path)
                 
     def save_file(self, editor):
         file_path = self.get_tab_file_path(editor)
@@ -300,6 +331,20 @@ class NotepadPy(QMainWindow):
         editor = self.tabs.currentWidget()
         if isinstance(editor, QsciScintilla):
             self.save_file_as(editor)
+
+    # drag event
+    def dragEnterEvent(self, event):
+        """Handles the drag enter event."""
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+
+    # drop event
+    def dropEvent(self, event):
+        """Handles the drop event."""
+        for url in event.mimeData().urls():
+            file_path = url.toLocalFile()
+            if file_path:
+                self.open_dropped_file(file_path)
             
     def set_language(self, language):
         for lang, action in self.language_actions.items():
