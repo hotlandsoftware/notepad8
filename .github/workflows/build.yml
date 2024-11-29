@@ -38,7 +38,7 @@ jobs:
                 
             - name: Build executable
               run: |
-                pip install -r dist/src/requirements.txt
+                pip install -r src/notepadpypp/requirements.txt
                 pip install pyinstaller
                 pyinstaller main.spec
 
