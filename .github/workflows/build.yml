@@ -38,6 +38,6 @@ jobs:
                 
             - name: Setup and run pyinstaller
               run: |
-                pip install -r src/notepadpypp/requirements.txt
+                pip install PyQt6 PyQt6.Qsci
                 pip install pyinstaller
                 pyinstaller --onefile --name "NotepadPyqq" src/notepadpypp/main.py --hidden-import=PyQt6.Qsci
