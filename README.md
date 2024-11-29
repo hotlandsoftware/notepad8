@@ -14,3 +14,6 @@ To eventually replicate Notepad++'s entire feature set. For the initial release,
 
 ## Will it ever be finished?
 Progress is going well, so I think I have a good shot. I appreciate any help!
+
+## Building
+Run ```pyinstaller --onefile src/notepadpypp/main.py``` to build an exe

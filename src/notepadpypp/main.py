@@ -256,6 +256,7 @@ class NotepadPy(QMainWindow):
                                 break
                     else:
                         self.set_language("None")
+                        editor.setModified(False)
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Failed to open file!:\n{str(e)}")
                 
