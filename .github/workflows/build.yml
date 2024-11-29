@@ -36,46 +36,8 @@ jobs:
                 arch: 'win64_msvc2022_64'
                 install-deps: 'true'
                 
-            - name: Build executable
-              uses: sayyid5416/pyinstaller@v1
-              with:
-                python_ver: '3.13'
-                spec: 'main.spec'
-                requirements: 'src/notepadpypp/requirements.txt'
-                options: --onefile, --name "NotepadPyqq" src/notepadpypp/main.py
-
-            - name: Compress (Windows)
-              if: runner.os == 'Windows'
+            - name: Test Python
               run: |
-                mkdir release
-                move dist\* release\
-                tar -a -c -f NotepadPypp-Windows-amd64.zip release
-             
-            - name: Compress (Linux)
-              if: runner.os == 'Linux'
-              run: |
-                mkdir release
-                mv dist/* release/
-                tar -czvf NotepadPypp-Linux-amd64.tar.gz release
-            
-            - name: Upload release (Windows)
-              if: runner.os == 'Windows'
-              uses: svenstaro/upload-release-action@v2
-              with:
-                repo_token: ${{ secrets.GITHUB_TOKEN }}
-                file: NotepadPypp-Windows-amd64.zip
-                asset_name: NotepadPypp-Windows-amd64.zip
-                tag: nppypp-prototype
-                prerelease: true
-                overwrite: true
-            
-            - name: Upload release (Linux)
-              if: runner.os == 'Linux'
-              uses: svenstaro/upload-release-action@v2
-              with:
-                repo_token: ${{ secrets.GITHUB_TOKEN }}
-                file: 'NotepadPypp-Linux-amd64.tar.gz'
-                asset_name: NotepadPypp-Linux-amd64.tar.gz
-                tag: nppypp-prototype
-                prerelease: true
-                overwrite: true
+                python --version || echo "Python not installed"
+                pip --version || echo "Pip not installed"
+                python -m pip || echo "Pip still not installed"
