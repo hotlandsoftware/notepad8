@@ -16,4 +16,4 @@ To eventually replicate Notepad++'s entire feature set. For the initial release,
 Progress is going well, so I think I have a good shot. I appreciate any help!
 
 ## Building
-Run ```pyinstaller notepadpypp/main.spec``` to build the project!
+Run ```pyinstaller main.spec``` to build the project!
