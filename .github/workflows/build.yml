@@ -40,4 +40,4 @@ jobs:
               run: |
                 pip install PyQt6 QScintilla
                 pip install pyinstaller
-                pyinstaller --onefile --name "NotepadPyqq" src/notepadpypp/main.py
+                pyinstaller --onefile --name "NotepadPypp" src/notepadpypp/main.py
