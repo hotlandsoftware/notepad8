@@ -27,7 +27,7 @@ DEFAULT_CONFIG = {
     "scintillaConfig": {
         "color": "#ffffff", # background color
         "caret_color": "#e8e8ff", # highlight color
-        "margins_color": "#c0c0c0", # margins color
+        "margins_color": "#e0e0e0", # margins color
         "font": "Courier New", # font
         "font_color": "#000", # font color
         "font_size": 12 # font size

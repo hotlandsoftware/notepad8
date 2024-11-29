@@ -201,7 +201,7 @@ class NotepadPy(QMainWindow):
         background_color = QColor(scintilla_config.get("color", "#FFFFFF"))
         font_color = QColor(scintilla_config.get("font_color", "#000000"))
         caret_color = QColor(scintilla_config.get("caret_color", "#e8e8ff"))
-        margins_color = QColor(scintilla_config.get("margins_color", "#c0c0c0"))
+        margins_color = QColor(scintilla_config.get("margins_color", "#e0e0e0"))
 
         editor.setPaper(background_color)
         editor.setColor(font_color)
