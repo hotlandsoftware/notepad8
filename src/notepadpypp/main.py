@@ -1,5 +1,6 @@
 import sys
 import os
+import json
 import re
 from typing import Optional, Dict, Any
 
@@ -164,12 +165,13 @@ class NotepadPy(QMainWindow):
         editor = QsciScintilla()
         scintilla_config = self.config.get("scintillaConfig", {})
 
-        # drag and drop support
+        # Drag and drop support
         editor.setAcceptDrops(True)
+
         def dragEnterEvent(event):
             if event.mimeData().hasUrls():
                 event.acceptProposedAction()
-        
+
         def dropEvent(event):
             for url in event.mimeData().urls():
                 file_path = url.toLocalFile()
@@ -178,8 +180,7 @@ class NotepadPy(QMainWindow):
 
         editor.dragEnterEvent = dragEnterEvent
         editor.dropEvent = dropEvent
-        
-        # editor settings
+
         editor.setMarginLineNumbers(0, True)
         editor.setMarginWidth(0, "0000")
 
@@ -187,34 +188,34 @@ class NotepadPy(QMainWindow):
         font.setFixedPitch(True)
         editor.setFont(font)
         editor.setMarginsFont(font)
-    
+
         background_color = QColor(scintilla_config.get("color", "#FFFFFF"))
         font_color = QColor(scintilla_config.get("font_color", "#000000"))
         caret_color = QColor(scintilla_config.get("caret_color", "#e8e8ff"))
         margins_color = QColor(scintilla_config.get("margins_color", "#c0c0c0"))
-        
+
         editor.setPaper(background_color)
         editor.setColor(font_color)
 
         editor.setCaretLineVisible(True)
         editor.setCaretLineBackgroundColor(caret_color)
-        editor.setMarginsBackgroundColor(margins_color)
+        editor.setMarginsBackgroundColor(background_color)
         editor.setMarginsForegroundColor(font_color)
-        
+
         editor.modificationChanged.connect(lambda: self.update_tab_modified_state(editor))
 
         lexer_class = get_lexer_for_file(file_name)
         if lexer_class:
             lexer = lexer_class()
             lexer.setFont(font)
-            
-            lexer.setPaper(background_color, lexer.Default);
-            
-            for style in range(1, 128):
+
+            for style in range(128):
                 lexer.setPaper(background_color, style)
-                
-            lexer.setColor(QColor(font_color), 11)
-            
+                lexer.setColor(font_color, style)
+
+            lexer.setPaper(background_color, lexer.Default)
+            lexer.setColor(font_color, lexer.Default)
+
             editor.setLexer(lexer)
         else:
             editor.setPaper(background_color)
@@ -347,7 +348,17 @@ class NotepadPy(QMainWindow):
             file_path = url.toLocalFile()
             if file_path:
                 self.open_dropped_file(file_path)
-            
+
+    def load_lexer_colors(self, lexer_name):
+        """Load lexer colors from a JSON (and soon also XML) file."""
+        lexer_file = os.path.join("lexer", f"{lexer_name}.json")
+        if os.path.exists(lexer_file):
+            with open(lexer_file, "r") as file:
+                return json.load(file)
+        else:
+            # fallback
+            return {}
+
     def set_language(self, language):
         for lang, action in self.language_actions.items():
             action.setChecked(lang == language)
@@ -375,18 +386,26 @@ class NotepadPy(QMainWindow):
             font.setFixedPitch(True)
             lexer.setFont(font)
             
-            lexer.setPaper(background_color, lexer.Default);
-            
-            for style in range(1, 128):
-                lexer.setPaper(background_color, style)
-                
-            lexer.setColor(QColor(font_color), 11)
+            lexer_name = lexer.__class__.__name__.replace("QsciLexer", "")
+            lexer_colors = self.load_lexer_colors(lexer_name)
+
+            for style in range(128): 
+                if lexer.description(style):
+                    color = lexer_colors.get(lexer.description(style), font_color.name())
+                    lexer.setColor(QColor(color), style)
+                    lexer.setPaper(background_color, style)
+                else: 
+                    lexer.setPaper(background_color, style)
+
+            lexer.setPaper(background_color, lexer.Default)
+            lexer.setColor(font_color, lexer.Default)
 
             editor.setLexer(lexer)
-        
+    
             editor.setPaper(background_color)
             editor.setColor(font_color)
-
+            editor.setMarginsBackgroundColor(QColor(scintilla_config.get("margins_color", "#c0c0c0")))
+            editor.setMarginsForegroundColor(QColor(font_color))
             
     def close_tab(self, index):
         editor = self.tabs.widget(index)

@@ -1,0 +1,11 @@
+{
+    "Default": "#000000",
+    "Keyword": "#0000FF",
+    "Comment": "#008000",
+    "Number": "#000080",
+    "Operator": "#000",
+    "Identifier": "#000",
+    "FunctionMethodName": "#795E26",
+    "ClassName": "#267F99",
+    "Decorator": "#B4008A"
+}
