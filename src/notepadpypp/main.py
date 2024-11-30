@@ -129,7 +129,6 @@ class NotepadPy(QMainWindow):
 
     def create_toolbar(self):
         """Creates the toolbar below the menu."""
-        # TODO: add a helper function similar to menu to make this cleaner
         toolbar = self.addToolBar("Main")
         toolbar.setMovable(False) # todo: add an unlocking feature
 
