@@ -67,7 +67,7 @@ class NotepadPy(QMainWindow):
         # Search Menu
         search_menu = menu_bar.addMenu("Search")
         search_actions = [
-            ("Find", "Ctrl+F", self.find_dialogue, "icons/search.png"),
+            ("Find", "Ctrl+F", self.find_dialog, "icons/search.png"),
             ("Find Next", "F3", self.find_next, None),
             ("Go to Line", "Ctrl+G", self.goto_line, None)
         ]
@@ -586,7 +586,7 @@ class NotepadPy(QMainWindow):
             "<p>GitHub: <a href='https://github.com/hotlandsoftware/notepadpypp'>https://github.com/hotlandsoftware/notepadpypp</a></p>"
         )
         
-    def find_dialogue(self):
+    def find_dialog(self):
         """Opens the search dialog."""
         editor = self.tabs.currentWidget()
         if not isinstance(editor, QsciScintilla):
@@ -597,7 +597,7 @@ class NotepadPy(QMainWindow):
             wrap_around=self.config.get("wrapAroundSearch", False),
             use_regex=self.config.get("useRegex", False),
         )
-        if dialog.exec() == QDialog.DialogCode.Accepted:
+        if dialog.show() == QDialog.DialogCode.Accepted:
             options = dialog.get_search_options()
             self.config["wrapAroundSearch"] = options["wrap_around"]
             self.config["useRegex"] = options["use_regex"]

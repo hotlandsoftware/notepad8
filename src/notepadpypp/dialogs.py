@@ -1,46 +1,42 @@
-from PyQt6.QtWidgets import ( 
-    QDialog, QVBoxLayout, QLabel, QLineEdit, 
-    QCheckBox, QRadioButton, QPushButton, QHBoxLayout, 
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import (
+    QDialog, QVBoxLayout, QLabel, QLineEdit,
+    QCheckBox, QRadioButton, QPushButton, QHBoxLayout,
     QGroupBox
 )
 
-# search dialog
 class SearchDialog(QDialog):
     def __init__(self, parent=None, wrap_around=False, use_regex=False):
         super().__init__(parent)
         self.setWindowTitle("Find")
         self.resize(400, 200)
 
+        self.setWindowModality(Qt.WindowModality.NonModal)
+
         layout = QVBoxLayout(self)
 
-        # input
         self.search_label = QLabel("Find what:")
         self.search_input = QLineEdit(self)
         layout.addWidget(self.search_label)
         layout.addWidget(self.search_input)
 
-        # group
         options_group = QGroupBox("Options")
         options_layout = QVBoxLayout()
 
         self.match_case = QCheckBox("Match case", self)
         self.wrap_around = QCheckBox("Wrap around", self)
-        
-        # make this more like notepad++ in the future 
         self.use_regex = QCheckBox("Regular expression", self)
 
         options_layout.addWidget(self.match_case)
         options_layout.addWidget(self.wrap_around)
         options_layout.addWidget(self.use_regex)
 
-        # initial states
         self.wrap_around.setChecked(wrap_around)
         self.use_regex.setChecked(use_regex)
 
         options_group.setLayout(options_layout)
         layout.addWidget(options_group)
 
-        # directions
         direction_group = QGroupBox("Direction")
         direction_layout = QHBoxLayout()
 
@@ -61,8 +57,13 @@ class SearchDialog(QDialog):
 
         layout.addLayout(button_layout)
 
-        self.find_next_button.clicked.connect(self.accept)
+        self.find_next_button.clicked.connect(self.on_find_next)
         self.close_button.clicked.connect(self.reject)
+
+    def on_find_next(self):
+        self.find_next_button.setEnabled(False)
+        self.parent().find_text_in_editor(self.parent().tabs.currentWidget(), self.get_search_options())
+        self.find_next_button.setEnabled(True)
 
     def get_search_options(self):
         return {
