@@ -428,6 +428,7 @@ class NotepadPy(QMainWindow):
             try:
                 with open(file_path, "w", encoding="utf-8") as file:
                     file.write(editor.text())
+                    editor.setModified(False)
                 self.modified_tabs[editor] = False
                 self.update_tab_title(editor, file_path)
             except Exception as e:
@@ -441,6 +442,7 @@ class NotepadPy(QMainWindow):
             try:
                 with open(file_path, "w", encoding="utf-8") as file:
                     file.write(editor.text())
+                    editor.setModified(False)
                 self.set_tab_file_path(editor, file_path)
                 self.modified_tabs[editor] = False
 
