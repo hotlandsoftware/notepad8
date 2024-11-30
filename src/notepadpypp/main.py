@@ -344,7 +344,6 @@ class NotepadPy(QMainWindow):
         if os.name == "nt":
             content = self.normalize_line_endings(content)
             editor.setText(content)
-            editor.SendScintilla(QsciScintilla.SCI_SETEOLMODE, QsciScintilla.EolWindows)
 
         editor.textChanged.connect(self.text_changed)
         return editor
