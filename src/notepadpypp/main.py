@@ -18,6 +18,7 @@ from PyQt6.QtNetwork import QLocalServer, QLocalSocket
 from PyQt6.Qsci import QsciScintilla, QsciLexer
 
 from config import initialize_config, save_config
+from plugin_api import PluginAPI
 from file_types import get_lexer_for_file, LANGUAGES
 from plugin_manager import PluginManager
 from dialogs import SearchDialog
@@ -33,7 +34,10 @@ class NotepadPy(QMainWindow):
         self.modified_tabs = {}
         self.new_file_counter = 2
         self.last_search_options = None
-        self.plugin_manager = PluginManager(self) 
+
+        self.plugin_manager = PluginManager(self)
+        self.plugin_api = PluginAPI(self, self.plugin_manager)
+        self.plugin_manager.plugin_api = self.plugin_api
 
         self.init_ui()
         self.plugin_manager.load_plugins()
@@ -98,7 +102,7 @@ class NotepadPy(QMainWindow):
         # Language Menu
         self.create_language_menu(menu_bar.addMenu("Language"))
 
-        self.get_plugins_menu() 
+        self.plugin_api.get_plugins_menu()
 
         # About Menu
         about_menu = menu_bar.addMenu("?")
@@ -140,67 +144,7 @@ class NotepadPy(QMainWindow):
                 action.setCheckable(True)
                 action.triggered.connect(lambda _, lang=language: self.set_language(lang))
                 self.language_actions[language] = action
-
-    # Create plugins menu
-    def create_plugins_menu(self, plugins_menu):
-        """Creates and populates the plugins menu."""
-        plugin_actions = [
-            ("Reload Plugins", None, self.reload_plugins, None),
-        ]
-
-        self.add_actions_to_menu(plugins_menu, plugin_actions)
-
-        plugins_menu.addSeparator()
-
-    def get_plugins_menu(self):
-        """Get or create the Plugins menu."""
-        # Try to find the Plugins menu
-        plugins_menu = self.menuBar().findChild(QMenu, "Plugins")
-        if not plugins_menu:
-            # Create the Plugins menu only if it doesn't already exist
-            plugins_menu = self.menuBar().addMenu("Plugins")
-            plugins_menu.setObjectName("Plugins")  # Set an object name for consistent retrieval
-            self.create_plugins_menu(plugins_menu)  # Initialize the Plugins menu
-        return plugins_menu
-
-    # Add Submenu to Plugins menu (for Plugins)
-    def add_to_plugin_menu(self, plugin_name):
-        """Adds a submenu to the Plugins menu."""
-        plugins_menu = self.get_plugins_menu()
-
-        for action in plugins_menu.actions():
-            if action.menu() and action.text() == plugin_name:
-                return action.menu()
-
-        plugin_menu = plugins_menu.addMenu(plugin_name)
-        return plugin_menu
-
-    def add_action_to_plugin_menu(self, plugin_name, action_name, callback=None):
-        """Adds an action under the specified plugin's submenu in the Plugins menu."""
-        plugin_menu = self.add_to_plugin_menu(plugin_name)
-        action = plugin_menu.addAction(action_name)
-        if callback:
-            action.triggered.connect(callback)
-        return action
-
-    # Reload plugins
-    def reload_plugins(self):
-        """Reloads all plugins and updates the Plugins menu."""
-        plugins_menu = self.get_plugins_menu()
-        plugins_menu.clear()
-
-        self.create_plugins_menu(plugins_menu)
-
-        self.plugin_manager.load_plugins()
-
-        loaded_plugins = self.plugin_manager.get_loaded_plugins()
-        for plugin in loaded_plugins:
-            plugin_module = plugin.get("module")
-            if hasattr(plugin_module, "register"):
-                plugin_module.register(self)
-
-        QMessageBox.information(self, "Plugins Reloaded", "Reloaded plugins successfully!")
-
+                
     def create_toolbar(self):
         """Creates the toolbar below the menu."""
         toolbar = self.addToolBar("Main")
@@ -241,6 +185,7 @@ class NotepadPy(QMainWindow):
                         self.set_language(language)
                     else:
                         self.set_language("None")
+                    editor.setModified(False) # TODO
             except IOError:
                 self.config["open_files"].remove(file_path)
                 save_config(self.config)
@@ -400,9 +345,6 @@ class NotepadPy(QMainWindow):
                         content = binary_content.hex()
                 else:    
                     content = binary_content.hex()
-                
-                content = self.normalize_line_endings(content)
-                print(f"Raw content (before setText): {repr(content)}")
                     
                 editor = self.add_new_tab(content, os.path.basename(file_path), file_name=file_path)
                 editor.setText(content)

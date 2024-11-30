@@ -6,7 +6,8 @@ class PluginManager:
     def __init__(self, app, plugins_dir="plugins"):
         """Initializes the PluginManager"""
         self.app = app 
-        self.plugins_dir = plugins_dir 
+        self.plugin_api = None
+        self.plugins_dir = plugins_dir
         self.plugins = []
 
     def load_plugins(self):
@@ -28,10 +29,11 @@ class PluginManager:
                     except json.JSONDecodeError:
                         print(f"not loading {plugin_name} due to invalid plugin.json")
                         continue
-
-                for file_name in os.listdir(plugin_path):
-                    if file_name.endswith(".py"):
-                        plugin_file_path = os.path.join(plugin_path, file_name)
+                
+                plugin_files = plugin_metadata.get("files", [])
+                for file_name in plugin_files:
+                    plugin_file_path = os.path.join(plugin_path, file_name)
+                    if os.path.isfile(plugin_file_path):
                         self.load_plugin(plugin_file_path, plugin_metadata)
 
     def load_plugin(self, file_path, metadata):
@@ -43,7 +45,7 @@ class PluginManager:
             spec.loader.exec_module(module)
 
             if hasattr(module, "register"):
-                module.register(self.app)
+                module.register(self.plugin_api)
                 self.plugins.append({
                     "metadata": metadata,
                     "module": module,
