@@ -208,7 +208,8 @@ class NotepadPy(QMainWindow):
 
         editor.setCaretLineVisible(True)
         editor.setCaretLineBackgroundColor(caret_color)
-        editor.setMarginsBackgroundColor(background_color)
+
+        editor.setMarginsBackgroundColor(QColor(scintilla_config.get("margins_color", "#c0c0c0")))
         editor.setMarginsForegroundColor(font_color)
 
         editor.modificationChanged.connect(lambda: self.update_tab_modified_state(editor))
@@ -294,9 +295,6 @@ class NotepadPy(QMainWindow):
                 else:
                     self.set_language("None")
 
-                scintilla_config = self.config.get("scintillaConfig", {})
-                editor.setMarginsBackgroundColor(QColor(scintilla_config.get("margins_color", "#c0c0c0")))
-                editor.setMarginsForegroundColor(QColor("#000000")) 
                 editor.setModified(False)
 
         except Exception as e:
