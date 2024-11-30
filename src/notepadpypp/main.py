@@ -2,6 +2,7 @@ import sys
 import os
 import json
 import re
+
 from typing import Optional, Dict, Any
 
 from PyQt6.QtGui import ( 
@@ -9,7 +10,7 @@ from PyQt6.QtGui import (
 )
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QFileDialog, QMessageBox, 
-    QTabWidget, QInputDialog, QDialog, QMenuBar
+    QTabWidget, QInputDialog, QDialog, QMenuBar, QMenu
 )
 from PyQt6.QtCore import QCoreApplication, Qt, QSize
 from PyQt6.QtPrintSupport import QPrinter, QPrintDialog
@@ -18,6 +19,7 @@ from PyQt6.Qsci import QsciScintilla, QsciLexer
 
 from config import initialize_config, save_config
 from file_types import get_lexer_for_file, LANGUAGES
+from plugin_manager import PluginManager
 from dialogs import SearchDialog
 
 class NotepadPy(QMainWindow):
@@ -28,8 +30,11 @@ class NotepadPy(QMainWindow):
         self.modified_tabs = {}
         self.new_file_counter = 2
         self.last_search_options = None
+        self.plugin_manager = PluginManager(self) 
 
         self.init_ui()
+        self.plugin_manager.load_plugins()
+
         self.restore_session()
 
     def init_ui(self):
@@ -89,12 +94,15 @@ class NotepadPy(QMainWindow):
         # Language Menu
         self.create_language_menu(menu_bar.addMenu("Language"))
 
+        self.get_plugins_menu() 
+
         # About Menu
         about_menu = menu_bar.addMenu("?")
         about_action = about_menu.addAction("About")
         about_action.setShortcut("F1")
         about_action.triggered.connect(self.show_about_box)
 
+    # Actions helper
     def add_actions_to_menu(self, menu, actions):
         """Helper to add actions to a menu."""
         for name, shortcut, handler, icon in actions:
@@ -102,9 +110,11 @@ class NotepadPy(QMainWindow):
                 action = menu.addAction(QIcon(icon), name)
             else:
                 action = menu.addAction(name)
-            action.setShortcut(shortcut)
+            if shortcut:
+                action.setShortcut(shortcut)
             action.triggered.connect(handler)
 
+    # Create language menu
     def create_language_menu(self, language_menu):
         """Initializes the language selection menu."""
         self.language_actions = {}
@@ -126,6 +136,66 @@ class NotepadPy(QMainWindow):
                 action.setCheckable(True)
                 action.triggered.connect(lambda _, lang=language: self.set_language(lang))
                 self.language_actions[language] = action
+
+    # Create plugins menu
+    def create_plugins_menu(self, plugins_menu):
+        """Creates and populates the plugins menu."""
+        plugin_actions = [
+            ("Reload Plugins", None, self.reload_plugins, None),
+        ]
+
+        self.add_actions_to_menu(plugins_menu, plugin_actions)
+
+        plugins_menu.addSeparator()
+
+    def get_plugins_menu(self):
+        """Get or create the Plugins menu."""
+        # Try to find the Plugins menu
+        plugins_menu = self.menuBar().findChild(QMenu, "Plugins")
+        if not plugins_menu:
+            # Create the Plugins menu only if it doesn't already exist
+            plugins_menu = self.menuBar().addMenu("Plugins")
+            plugins_menu.setObjectName("Plugins")  # Set an object name for consistent retrieval
+            self.create_plugins_menu(plugins_menu)  # Initialize the Plugins menu
+        return plugins_menu
+
+    # Add Submenu to Plugins menu (for Plugins)
+    def add_to_plugin_menu(self, plugin_name):
+        """Adds a submenu to the Plugins menu."""
+        plugins_menu = self.get_plugins_menu()
+
+        for action in plugins_menu.actions():
+            if action.menu() and action.text() == plugin_name:
+                return action.menu()
+
+        plugin_menu = plugins_menu.addMenu(plugin_name)
+        return plugin_menu
+
+    def add_action_to_plugin_menu(self, plugin_name, action_name, callback=None):
+        """Adds an action under the specified plugin's submenu in the Plugins menu."""
+        plugin_menu = self.add_to_plugin_menu(plugin_name)
+        action = plugin_menu.addAction(action_name)
+        if callback:
+            action.triggered.connect(callback)
+        return action
+
+    # Reload plugins
+    def reload_plugins(self):
+        """Reloads all plugins and updates the Plugins menu."""
+        plugins_menu = self.get_plugins_menu()
+        plugins_menu.clear()
+
+        self.create_plugins_menu(plugins_menu)
+
+        self.plugin_manager.load_plugins()
+
+        loaded_plugins = self.plugin_manager.get_loaded_plugins()
+        for plugin in loaded_plugins:
+            plugin_module = plugin.get("module")
+            if hasattr(plugin_module, "register"):
+                plugin_module.register(self)
+
+        QMessageBox.information(self, "Plugins Reloaded", "Reloaded plugins successfully!")
 
     def create_toolbar(self):
         """Creates the toolbar below the menu."""
@@ -612,7 +682,7 @@ class NotepadPy(QMainWindow):
             doc.print(printer)
             
     def show_about_box(self):
-        """The about box for the program."""
+        """Displays the about box for the program."""
         QMessageBox.about(
             self,
             "About NotepadPy++",

@@ -1,6 +1,7 @@
 # generated files
 src/notepadpypp/config.json
 src/notepadpypp/__pycache__
+plugins/helloworld/__pycache__
 dist/
 build/
 NotepadPypp.spec
