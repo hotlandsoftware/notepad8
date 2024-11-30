@@ -4,12 +4,14 @@ import json
 import re
 from typing import Optional, Dict, Any
 
-from PyQt6.QtGui import QFont, QColor, QTextDocument, QIcon
+from PyQt6.QtGui import ( 
+    QFont, QColor, QTextDocument, QIcon, QAction
+)
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QFileDialog, QMessageBox, 
     QTabWidget, QInputDialog, QDialog, QMenuBar
 )
-from PyQt6.QtCore import QCoreApplication, Qt
+from PyQt6.QtCore import QCoreApplication, Qt, QSize
 from PyQt6.QtPrintSupport import QPrinter, QPrintDialog
 from PyQt6.QtNetwork import QLocalServer, QLocalSocket
 from PyQt6.Qsci import QsciScintilla, QsciLexer
@@ -46,7 +48,11 @@ class NotepadPy(QMainWindow):
         # For now, I've compromised by disabling native file dialogs by default (can be enabled back in config.json)
         QCoreApplication.setAttribute(Qt.ApplicationAttribute.AA_DontUseNativeDialogs, self.config.get("useQtDialogs", True))
 
+        # create menu bar
         self.create_menu_bar()
+
+        # create toolbar
+        self.create_toolbar()
 
     def create_menu_bar(self):
         """Initialize the menu bar, and populate it with menus/actions."""
@@ -120,6 +126,32 @@ class NotepadPy(QMainWindow):
                 action.setCheckable(True)
                 action.triggered.connect(lambda _, lang=language: self.set_language(lang))
                 self.language_actions[language] = action
+
+    def create_toolbar(self):
+        """Creates the toolbar below the menu."""
+        # TODO: add a helper function similar to menu to make this cleaner
+        toolbar = self.addToolBar("Main")
+        toolbar.setMovable(False) # todo: add an unlocking feature
+
+        toolbar.setIconSize(QSize(16, 16))
+
+        toolbar_actions = [
+            ("New", "icons/new.png", self.new_file, "New"),
+            ("Open", "icons/open.png", self.open_file_dialog, "Open"),
+            ("Save", "icons/save.png", self.save_current_file, "Save"),
+            ("Save As", "icons/save_as.png", self.save_current_file_as, "Save As"),
+            ("Print", "icons/print.png", self.print_file, "Print"),
+        ]
+
+        self.add_actions_to_toolbar(toolbar, toolbar_actions)
+
+    def add_actions_to_toolbar(self, toolbar, actions):
+        """Helper to add actions to a toolbar."""
+        for name, icon, handler, tooltip in actions:
+            action = QAction(QIcon(icon), name, self)
+            action.triggered.connect(handler)
+            action.setToolTip(tooltip)
+            toolbar.addAction(action)
 
     def restore_session(self):
         """Restore open files from the previous session. TODO: Implement Notepad++ functionality where it restores modified files as well."""
