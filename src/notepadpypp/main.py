@@ -431,11 +431,11 @@ class NotepadPy(QMainWindow):
                 with open(file_path, "w", encoding="utf-8") as file: # TODO 
                     file.write(normalized_content)
                 
-                editor.setModified(false)
+                editor.setModified(False)
                 self.modified_tabs[editor] = False 
                 self.update_tab_title(editor, file_path)
             except Exception as e:
-                QMessageBox.critical(self, "Error", f"Failed to open file!:\n{str(e)}")
+                QMessageBox.critical(self, "Error", f"Failed to save file!:\n{str(e)}")
         else:
             self.save_file_as(editor)
             
