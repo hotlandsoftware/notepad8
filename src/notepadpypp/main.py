@@ -80,6 +80,7 @@ class NotepadPy(QMainWindow):
         search_actions = [
             ("Find", "Ctrl+F", self.find_dialog, "icons/search.png"),
             ("Find Next", "F3", self.find_next, None),
+            ("Find Previous", "Shift+F3", self.find_previous, None),
             ("Go to Line", "Ctrl+G", self.goto_line, None)
         ]
         self.add_actions_to_menu(search_menu, search_actions)
@@ -721,10 +722,9 @@ class NotepadPy(QMainWindow):
 
         full_text = editor.text()
         current_position = editor.SendScintilla(QsciScintilla.SCI_GETCURRENTPOS)
-        start_pos = current_position if forward else 0
 
-        print(f"searching {search_text} | regex: {use_regex} | match case: {match_case} | wrap around: {wrap_around}")
-        
+        print(f"Searching '{search_text}' | Regex: {use_regex} | Match case: {match_case} | Wrap around: {wrap_around} | Direction: {'down' if forward else 'up'}")
+    
         flags = 0 if match_case else re.IGNORECASE
         
         try:
@@ -732,34 +732,51 @@ class NotepadPy(QMainWindow):
                 pattern = re.compile(search_text, flags)
             else:
                 pattern = re.compile(re.escape(search_text), flags)
-            
+
             match = None
-            
+
             if forward:
-                match = pattern.search(full_text, pos=start_pos)
+                match = pattern.search(full_text, pos=current_position)
                 if not match and wrap_around:
                     match = pattern.search(full_text, pos=0)
             else:
                 matches = list(pattern.finditer(full_text[:current_position]))
                 if matches:
-                    match = matches[1]
+                    match = matches[-1]
                 elif wrap_around:
                     matches = list(pattern.finditer(full_text))
                     if matches:
                         match = matches[-1]
-                        
+
             if match:
                 start, end = match.span()
                 editor.SendScintilla(QsciScintilla.SCI_SETSEL, start, end)
             else:
+                direction_text = "upwards" if not forward else "downwards"
                 if wrap_around:
-                    QMessageBox.information(self, "Find", f"Can't find the text '{search_text}' in the entire file.")
+                    QMessageBox.information(self, "Find", f"'{search_text}' not found in the entire file.")
                 else:
-                    QMessageBox.information(self, "Find", f"Can't find the text '{search_text}' from caret to end-of-file.")
+                    QMessageBox.information(self, "Find", f"'{search_text}' not found {direction_text} from the caret position.")
         except re.error as e:
             QMessageBox.critical(self, "Regex Error", f"Invalid regular expression: {e}")
+
             
     def find_next(self):
+        """Finds the next occurrence in a specified search."""
+        current_editor = self.tabs.currentWidget()
+        if not isinstance(current_editor, QsciScintilla):
+            return
+            
+        if not self.last_search_options:
+            QMessageBox.warning(self, "Find", "No previous search to continue.")
+            return
+            
+        self.last_search_options["direction"] = "down"
+        self.find_text_in_editor(current_editor, self.last_search_options)
+    
+    # we can probably do this in one function
+    def find_previous(self):
+        """Finds the previous occurrence in a specified search."""
         current_editor = self.tabs.currentWidget()
         if not isinstance(current_editor, QsciScintilla):
             return
@@ -767,6 +784,7 @@ class NotepadPy(QMainWindow):
         if not self.last_search_options:
             return
             
+        self.last_search_options["direction"] = "up"
         self.find_text_in_editor(current_editor, self.last_search_options)
         
 

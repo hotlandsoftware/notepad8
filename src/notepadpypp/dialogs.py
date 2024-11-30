@@ -61,9 +61,11 @@ class SearchDialog(QDialog):
         self.close_button.clicked.connect(self.reject)
 
     def on_find_next(self):
-        self.find_next_button.setEnabled(False)
+        search_options = self.get_search_options()
+
+        self.parent().last_search_options = search_options
+
         self.parent().find_text_in_editor(self.parent().tabs.currentWidget(), self.get_search_options())
-        self.find_next_button.setEnabled(True)
 
     def get_search_options(self):
         return {
