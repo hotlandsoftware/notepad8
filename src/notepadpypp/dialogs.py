@@ -17,6 +17,7 @@ class SearchDialog(QDialog):
 
         self.search_label = QLabel("Find what:")
         self.search_input = QLineEdit(self)
+        self.search_input.setText(last_search_text)
         layout.addWidget(self.search_label)
         layout.addWidget(self.search_input)
 
