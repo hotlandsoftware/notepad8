@@ -317,6 +317,12 @@ class NotepadPy(QMainWindow):
         editor.setMarginsBackgroundColor(QColor(scintilla_config.get("margins_color", "#c0c0c0")))
         editor.setMarginsForegroundColor(font_color)
 
+        # TODO: make these toggable settings
+        editor.setFolding(QsciScintilla.FoldStyle.BoxedFoldStyle)
+
+        editor.setAutoCompletionSource(QsciScintilla.AutoCompletionSource.AcsAll)
+        editor.setAutoCompletionThreshold(2)
+
         editor.modificationChanged.connect(lambda: self.update_tab_modified_state(editor))
 
         lexer_class = get_lexer_for_file(file_name)
@@ -400,6 +406,7 @@ class NotepadPy(QMainWindow):
                     content = binary_content.hex()
                 
                 content = self.normalize_line_endings(content)
+                print(f"Raw content (before setText): {repr(content)}")
                     
                 editor = self.add_new_tab(content, os.path.basename(file_path), file_name=file_path)
                 editor.setText(content)
@@ -435,11 +442,8 @@ class NotepadPy(QMainWindow):
         file_path = self.get_tab_file_path(editor)
         if file_path:
             try:
-                content = editor.text()
-                content = self.normalize_line_endings(content)
-
-                with open(file_path, "w", encoding="utf-8") as file: # TODO 
-                    file.write(content)
+                with open(file_path, "w", encoding="utf-8", newline='') as file: # TODO
+                    file.write(editor.text())
                 
                 editor.setModified(False)
                 self.modified_tabs[editor] = False 
@@ -453,7 +457,7 @@ class NotepadPy(QMainWindow):
         file_path, _ = QFileDialog.getSaveFileName(self, "Save File", "", "All Files (*)")
         if file_path:
             try:
-                with open(file_path, "w", encoding="utf-8") as file:
+                with open(file_path, "w", encoding="utf-8", newline='') as file:
                     file.write(editor.text())
                     editor.setModified(False)
                 self.set_tab_file_path(editor, file_path)
@@ -826,13 +830,10 @@ class NotepadPy(QMainWindow):
         options["direction"] = "up"
         self.find_text_in_editor(editor, options)
 
-    def normalize_line_endings(self, content): # for retarded operating systems with retarded bugs
-        """Normalize line endings for poorly designed operating systems."""
-        content = content.replace("\r\r\n", "\n")
-        content = content.replace("\r\n", "\n").replace("\r", "\n")
-        if os.name == "nt": 
-            return content.replace("\n", "\r\n")
-        return content
+    def normalize_line_endings(self, content):
+        """Normalize line endings (needed to fix a bug on Windows)."""
+        content = content.replace("\r\r\n", "\r\n").replace("\r\n", "\n").replace("\r", "\n") 
+        return content.replace("\n", "\r\n") if os.name == "nt" else content
         
 
 # only allow a single instance to run
