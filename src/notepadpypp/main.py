@@ -426,10 +426,13 @@ class NotepadPy(QMainWindow):
         file_path = self.get_tab_file_path(editor)
         if file_path:
             try:
-                with open(file_path, "w", encoding="utf-8") as file:
-                    file.write(editor.text())
-                    editor.setModified(False)
-                self.modified_tabs[editor] = False
+                content = editor.text()
+                normalized_content = content.replace("\r\n", "\n").replace("\n", os.linesep)
+                with open(file_path, "w", encoding="utf-8") as file: # TODO 
+                    file.write(normalized_content)
+                
+                editor.setModified(false)
+                self.modified_tabs[editor] = False 
                 self.update_tab_title(editor, file_path)
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Failed to open file!:\n{str(e)}")
