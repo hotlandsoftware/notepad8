@@ -22,6 +22,9 @@ from file_types import get_lexer_for_file, LANGUAGES
 from plugin_manager import PluginManager
 from dialogs import SearchDialog
 
+# additional projects go here
+from charset_normalizer import from_bytes
+
 class NotepadPy(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -379,9 +382,14 @@ class NotepadPy(QMainWindow):
         try:
             with open(file_path, "rb") as file:  # Open in binary mode
                 binary_content = file.read()
-                try:
-                    content = binary_content.decode("utf-8")
-                except UnicodeDecodeError:
+
+                # TODO: also do this on restore session, saving files, etc
+                detected = from_bytes(binary_content).best() # use charset-normalizer to get the best encoding
+
+                if detected:
+                    encoding = detected.encoding
+                    content = binary_content.decode(encoding)
+                else:    
                     content = binary_content.hex()
                     
                 editor = self.add_new_tab(content, os.path.basename(file_path), file_name=file_path)
