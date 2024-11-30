@@ -273,10 +273,14 @@ class NotepadPy(QMainWindow):
                     self, "Error", f"The file {os.path.basename(file_path)} is already open"
                 )
                 return 
-
         try:
-            with open(file_path, "r", encoding="utf-8") as file:
-                content = file.read()
+            with open(file_path, "rb") as file:  # Open in binary mode
+                binary_content = file.read()
+                try:
+                    content = binary_content.decode("utf-8")
+                except UnicodeDecodeError:
+                    content = binary_content.hex()
+                    
                 editor = self.add_new_tab(content, os.path.basename(file_path), file_name=file_path)
                 editor.setText(content)
                 editor.setModified(False)
@@ -290,8 +294,7 @@ class NotepadPy(QMainWindow):
                             break
                 else:
                     self.set_language("None")
-                    editor.setModified(False)
-                    
+
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to open file '{file_path}':\n{str(e)}")
 
