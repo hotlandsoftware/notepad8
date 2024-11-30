@@ -283,7 +283,6 @@ class NotepadPy(QMainWindow):
                     
                 editor = self.add_new_tab(content, os.path.basename(file_path), file_name=file_path)
                 editor.setText(content)
-                editor.setModified(False)
 
                 # Set language for the file
                 lexer_class = get_lexer_for_file(file_path)
@@ -294,6 +293,11 @@ class NotepadPy(QMainWindow):
                             break
                 else:
                     self.set_language("None")
+
+                scintilla_config = self.config.get("scintillaConfig", {})
+                editor.setMarginsBackgroundColor(QColor(scintilla_config.get("margins_color", "#c0c0c0")))
+                editor.setMarginsForegroundColor(QColor("#000000")) 
+                editor.setModified(False)
 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to open file '{file_path}':\n{str(e)}")
@@ -522,14 +526,15 @@ class NotepadPy(QMainWindow):
         if isinstance(editor, QsciScintilla):
             file_path = self.get_tab_file_path(editor)
             if file_path:
+                current_language = self.current_language
                 lexer_class = get_lexer_for_file(file_path)
                 if lexer_class:
                     for language, cls in LANGUAGES.items():
-                        if cls == lexer_class:
+                        if cls == lexer_class and language != current_language:
                             self.set_language(language)
-                            return
-                        
-            self.set_language("None")
+                            break
+            else:
+                self.set_language("None")
     
     def update_tab_modified_state(self, editor):
         """Changes the tab icon, as well as adds a *, if the file is modified."""
