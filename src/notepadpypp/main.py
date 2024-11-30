@@ -341,6 +341,11 @@ class NotepadPy(QMainWindow):
         else:
             editor.setWrapMode(QsciScintilla.WrapMode.WrapNone)
 
+        if os.name == "nt":
+            content = self.normalize_line_endings(content)
+            editor.setText(content)
+            editor.SendScintilla(QsciScintilla.SCI_SETEOLMODE, QsciScintilla.EolWindows)
+
         editor.textChanged.connect(self.text_changed)
         return editor
 
@@ -388,9 +393,14 @@ class NotepadPy(QMainWindow):
 
                 if detected:
                     encoding = detected.encoding
-                    content = binary_content.decode(encoding)
+                    try: 
+                        content = binary_content.decode(encoding)
+                    except UnicodeDecodeError:
+                        content = binary_content.hex()
                 else:    
                     content = binary_content.hex()
+                
+                content = self.normalize_line_endings(content)
                     
                 editor = self.add_new_tab(content, os.path.basename(file_path), file_name=file_path)
                 editor.setText(content)
@@ -427,9 +437,10 @@ class NotepadPy(QMainWindow):
         if file_path:
             try:
                 content = editor.text()
-                normalized_content = content.replace("\r\n", "\n").replace("\n", os.linesep)
+                content = self.normalize_line_endings(content)
+
                 with open(file_path, "w", encoding="utf-8") as file: # TODO 
-                    file.write(normalized_content)
+                    file.write(content)
                 
                 editor.setModified(False)
                 self.modified_tabs[editor] = False 
@@ -815,6 +826,14 @@ class NotepadPy(QMainWindow):
         options = self.get_last_search()
         options["direction"] = "up"
         self.find_text_in_editor(editor, options)
+
+    def normalize_line_endings(self, content): # for retarded operating systems with retarded bugs
+        """Normalize line endings for poorly designed operating systems."""
+        content = content.replace("\r\r\n", "\n")
+        content = content.replace("\r\n", "\n").replace("\r", "\n")
+        if os.name == "nt": 
+            return content.replace("\n", "\r\n")
+        return content
         
 
 # only allow a single instance to run
