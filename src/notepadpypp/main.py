@@ -766,7 +766,12 @@ class NotepadPy(QMainWindow):
 
             if match:
                 start, end = match.span()
-                editor.SendScintilla(QsciScintilla.SCI_SETSEL, start, end)
+
+                if forward:
+                    editor.SendScintilla(QsciScintilla.SCI_SETSEL, start, end)
+                else:
+                    editor.SendScintilla(QsciScintilla.SCI_SETSEL, end, start)
+                    
             else:
                 direction_text = "upwards" if not forward else "downwards"
                 if wrap_around:
