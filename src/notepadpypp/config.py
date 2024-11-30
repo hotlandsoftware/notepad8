@@ -17,6 +17,7 @@ def get_config_path():
 CONFIG_PATH = get_config_path()
 
 DEFAULT_CONFIG = {
+    "debugMode": False, # Enable console debug mode
     "wordWrap": False, # Use word wrapping
     "wrapAroundSearch": False, # Search from top if not found on bottom in search (or vice versa)
     "useRegex": False, # Use regular expressions in search
@@ -36,9 +37,7 @@ DEFAULT_CONFIG = {
 }
 
 def initialize_config():
-    print("initializing configuration")
     if not os.path.exists(CONFIG_PATH):
-        print("config file not found - creating it")
         with open(CONFIG_PATH, "w", encoding="utf-8") as config_file:
             json.dump(DEFAULT_CONFIG, config_file, indent=4)
 

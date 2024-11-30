@@ -5,4 +5,3 @@ src/notepadpypp/plugins/helloworld/__pycache__
 dist/
 build/
 NotepadPypp.spec
-src/notepadpypp/plugins/bf-interpreter

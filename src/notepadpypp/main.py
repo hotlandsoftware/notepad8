@@ -704,7 +704,8 @@ class NotepadPy(QMainWindow):
         full_text = editor.text()
         current_position = editor.SendScintilla(QsciScintilla.SCI_GETCURRENTPOS)
 
-        print(f"Searching '{search_text}' | Regex: {use_regex} | Match case: {match_case} | Wrap around: {wrap_around} | Direction: {'down' if forward else 'up'}")
+        if self.config.get("debugMode", True):
+            print(f"Searching '{search_text}' | Regex: {use_regex} | Match case: {match_case} | Wrap around: {wrap_around} | Direction: {'down' if forward else 'up'}")
     
         flags = 0 if match_case else re.IGNORECASE
         
@@ -788,7 +789,8 @@ def setup_single_instance_server(app_id="NotepadPy"):
         
         if existing_instance.waitForConnected(1000):
             # todo: make it focus on window, like notepad++ does
-            print("ERROR: Only one insance of NotepadPy++ can run at a time")
+            if self.config.get("debugMode", True):
+                print("ERROR: Only one insance of NotepadPy++ can run at a time")
             QMessageBox.critical(
                 None, "Error", "Only one instance of NotepadPy++ can run at a time"
             )
@@ -796,7 +798,8 @@ def setup_single_instance_server(app_id="NotepadPy"):
         else:
             QLocalServer.removeServer(app_id)
             if not server.listen(app_id):
-                print("ERROR: Failed to create server")
+                if self.config.get("debugMode", True):
+                    print("ERROR: Failed to create server")
                 QMessageBox.critical(
                     None, "Error", "Failed to create server"
                 )
