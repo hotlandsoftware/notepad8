@@ -681,7 +681,8 @@ class NotepadPy(QMainWindow):
             doc = QTextDocument()
             doc.setPlainText(print_text)
             doc.print(printer)
-            
+
+    # About Box
     def show_about_box(self):
         """Displays the about box for the program."""
         QMessageBox.about(
@@ -694,6 +695,7 @@ class NotepadPy(QMainWindow):
             "<p>GitHub: <a href='https://github.com/hotlandsoftware/notepadpypp'>https://github.com/hotlandsoftware/notepadpypp</a></p>"
         )
         
+    # Search Dialog
     def find_dialog(self):
         """Opens the search dialog."""
         editor = self.tabs.currentWidget()
@@ -704,6 +706,7 @@ class NotepadPy(QMainWindow):
             self,
             wrap_around=self.config.get("wrapAroundSearch", False),
             use_regex=self.config.get("useRegex", False),
+            last_search_text=self.get_last_search()["text"]
         )
         if dialog.show() == QDialog.DialogCode.Accepted:
             options = dialog.get_search_options()
@@ -712,6 +715,19 @@ class NotepadPy(QMainWindow):
             save_config(self.config)
             self.last_search_options = options
             self.find_text_in_editor(editor, options)
+
+    # Get Last Search
+    def get_last_search(self):
+        """Returns the last search option (returns defaults if none exist)."""
+        if self.last_search_options is None:
+            self.last_search_options = {
+                "text": "",
+                "match_case": False,
+                "wrap_around": False,
+                "use_regex": False,
+                "direction": "down",
+            }
+        return self.last_search_options
             
     def find_text_in_editor(self, editor, options):
         search_text = options["text"]
@@ -763,29 +779,24 @@ class NotepadPy(QMainWindow):
             
     def find_next(self):
         """Finds the next occurrence in a specified search."""
-        current_editor = self.tabs.currentWidget()
-        if not isinstance(current_editor, QsciScintilla):
-            return
-            
-        if not self.last_search_options:
-            QMessageBox.warning(self, "Find", "No previous search to continue.")
-            return
-            
-        self.last_search_options["direction"] = "down"
-        self.find_text_in_editor(current_editor, self.last_search_options)
+        editor = self.tabs.currentWidget()
+        if not isinstance(editor, QsciScintilla):
+            return 
+        
+        options = self.get_last_search()
+        options["direction"] = "down"
+        self.find_text_in_editor(editor, options)
     
     # we can probably do this in one function
     def find_previous(self):
         """Finds the previous occurrence in a specified search."""
-        current_editor = self.tabs.currentWidget()
-        if not isinstance(current_editor, QsciScintilla):
-            return
-            
-        if not self.last_search_options:
-            return
-            
-        self.last_search_options["direction"] = "up"
-        self.find_text_in_editor(current_editor, self.last_search_options)
+        editor = self.tabs.currentWidget()
+        if not isinstance(editor, QsciScintilla):
+            return 
+        
+        options = self.get_last_search()
+        options["direction"] = "up"
+        self.find_text_in_editor(editor, options)
         
 
 # only allow a single instance to run

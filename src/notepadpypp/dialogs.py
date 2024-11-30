@@ -6,7 +6,7 @@ from PyQt6.QtWidgets import (
 )
 
 class SearchDialog(QDialog):
-    def __init__(self, parent=None, wrap_around=False, use_regex=False):
+    def __init__(self, parent=None, wrap_around=False, use_regex=False, last_search_text=""):
         super().__init__(parent)
         self.setWindowTitle("Find")
         self.resize(400, 200)
