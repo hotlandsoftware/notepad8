@@ -347,10 +347,6 @@ class NotepadPy(QMainWindow):
         else:
             editor.setWrapMode(QsciScintilla.WrapMode.WrapNone)
 
-        if os.name == "nt":
-            content = self.normalize_line_endings(content)
-            editor.setText(content)
-
         editor.textChanged.connect(self.text_changed)
         return editor
 
@@ -829,11 +825,6 @@ class NotepadPy(QMainWindow):
         options = self.get_last_search()
         options["direction"] = "up"
         self.find_text_in_editor(editor, options)
-
-    def normalize_line_endings(self, content):
-        """Normalize line endings (needed to fix a bug on Windows)."""
-        content = content.replace("\r\r\n", "\r\n").replace("\r\n", "\n").replace("\r", "\n") 
-        return content.replace("\n", "\r\n") if os.name == "nt" else content
         
 
 # only allow a single instance to run
