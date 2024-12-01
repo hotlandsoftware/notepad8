@@ -269,6 +269,8 @@ class NotepadPy(QMainWindow):
         editor.setFolding(QsciScintilla.FoldStyle.BoxedFoldStyle)
         editor.setAutoCompletionSource(QsciScintilla.AutoCompletionSource.AcsAll)
         editor.setAutoCompletionThreshold(2)
+        editor.setIndentationsUseTabs(False)
+        editor.setTabWidth(4) 
 
         editor.modificationChanged.connect(lambda: self.update_tab_modified_state(editor))
 
