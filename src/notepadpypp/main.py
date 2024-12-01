@@ -32,6 +32,7 @@ class NotepadPy(QMainWindow):
         self.config = initialize_config()
         self.file_paths = {}
         self.modified_tabs = {}
+        self.tab_settings = {}
         self.new_file_counter = 2
         self.last_search_options = None
 
@@ -482,6 +483,12 @@ class NotepadPy(QMainWindow):
 
             editor.setLexer(lexer)
             editor.SendScintilla(QsciScintilla.SCI_COLOURISE, 0, editor.length())
+
+            self.tab_settings[editor] = {
+                'language': language,
+                'font': font
+            }
+
             print(f"setting language to {language} lexer: {lexer_class}")
             
     def close_tab(self, index):
@@ -583,19 +590,15 @@ class NotepadPy(QMainWindow):
         
         editor = self.tabs.widget(index)
         
-        # this will break specifying a lexer and switching tabs. need to invent a new method for this
         if isinstance(editor, QsciScintilla):
-            file_path = self.get_tab_file_path(editor)
-            if file_path:
-                current_language = self.current_language
-                lexer_class = get_lexer_for_file(file_path)
-                if lexer_class:
-                    for language, cls in LANGUAGES.items():
-                        if cls == lexer_class and language != current_language:
-                            self.set_language(language)
-                            break
-            else:
-                self.set_language("None")
+            settings = self.tab_settings.get(editor, {})
+            language = settings.get('language', 'None')
+            font = settings.get('font')
+
+            if language:
+                self.set_language(language)
+            if font:
+                editor.setFont(font)
     
     def update_tab_modified_state(self, editor):
         """Changes the tab icon, as well as adds a *, if the file is modified."""
