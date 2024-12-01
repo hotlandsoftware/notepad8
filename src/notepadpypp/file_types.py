@@ -9,9 +9,15 @@ from PyQt6.Qsci import (
     QsciLexerXML, QsciLexerYAML
 )
 
+from custom_lexers import ( 
+    BrainfuckLexer
+)
+
 LEXER_TYPES = {
     ".asm": QsciLexerAsm,
     ".bat": QsciLexerBatch,
+    ".b": BrainfuckLexer,
+    ".bf": BrainfuckLexer,
     ".cmake": QsciLexerCMake,
     ".cmd": QsciLexerBatch,
     ".C": QsciLexerCPP,
@@ -68,6 +74,7 @@ LANGUAGES = {
     "Assembly (x86)": QsciLexerAsm,
     "Bash": QsciLexerBash,
     "Batch": QsciLexerBatch,
+    "Brainfuck": BrainfuckLexer,
     "CMake": QsciLexerCMake,
     "C#": QsciLexerCSharp,
     "C++": QsciLexerCPP,

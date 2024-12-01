@@ -173,22 +173,26 @@ class NotepadPy(QMainWindow):
     def restore_session(self):
         """Restore open files from the previous session. TODO: Implement Notepad++ functionality where it restores modified files as well."""
         open_files = self.config.get("open_files", [])
-        for file_path in open_files:
-            try:
-                with open(file_path, "r", encoding="utf-8") as file:
-                    content = file.read()
-                    editor = self.add_new_tab(content, os.path.basename(file_path), file_name=file_path)
+
+        if self.config.get("restoreFilesOnClose", True):
+            for file_path in open_files:
+                try:
+                    with open(file_path, "r", encoding="utf-8") as file:
+                        content = file.read()
+                        editor = self.add_new_tab(content, os.path.basename(file_path), file_name=file_path)
                     
-                    lexer_class = get_lexer_for_file(file_path)
-                    if lexer_class:
-                        language = next((language for language, cls in LANGUAGES.items() if cls == lexer_class), "None")
-                        self.set_language(language)
-                    else:
-                        self.set_language("None")
-                    editor.setModified(False) # TODO
-            except IOError:
-                self.config["open_files"].remove(file_path)
-                save_config(self.config)
+                        lexer_class = get_lexer_for_file(file_path)
+                        if lexer_class:
+                            language = next((language for language, cls in LANGUAGES.items() if cls == lexer_class), "None")
+                            self.set_language(language)
+                        else:
+                            self.set_language("None")
+                        editor.setModified(False) # TODO
+                except IOError:
+                    self.config["open_files"].remove(file_path)
+                    save_config(self.config)
+        else:
+            self.add_new_tab()
                 
         if not open_files:
             self.add_new_tab()
@@ -255,37 +259,17 @@ class NotepadPy(QMainWindow):
 
         editor.setPaper(background_color)
         editor.setColor(font_color)
-
         editor.setCaretLineVisible(True)
         editor.setCaretLineBackgroundColor(caret_color)
-
         editor.setMarginsBackgroundColor(QColor(scintilla_config.get("margins_color", "#c0c0c0")))
         editor.setMarginsForegroundColor(font_color)
 
         # TODO: make these toggable settings
         editor.setFolding(QsciScintilla.FoldStyle.BoxedFoldStyle)
-
         editor.setAutoCompletionSource(QsciScintilla.AutoCompletionSource.AcsAll)
         editor.setAutoCompletionThreshold(2)
 
         editor.modificationChanged.connect(lambda: self.update_tab_modified_state(editor))
-
-        lexer_class = get_lexer_for_file(file_name)
-        if lexer_class:
-            lexer = lexer_class()
-            lexer.setFont(font)
-
-            for style in range(128):
-                lexer.setPaper(background_color, style)
-                lexer.setColor(font_color, style)
-
-            lexer.setPaper(background_color, lexer.Default)
-            lexer.setColor(font_color, lexer.Default)
-
-            editor.setLexer(lexer)
-        else:
-            editor.setPaper(background_color)
-            editor.setColor(font_color)
 
         if self.config.get("wordWrap", False):
             editor.setWrapMode(QsciScintilla.WrapMode.WrapWord)
@@ -432,12 +416,22 @@ class NotepadPy(QMainWindow):
 
     def load_lexer_colors(self, lexer_name):
         """Load lexer colors from a JSON (and soon also XML) file."""
-        lexer_file = os.path.join("lexer", f"{lexer_name}.json")
-        if os.path.exists(lexer_file):
+        lexer_name = lexer_name.replace("Lexer", "")
+        if lexer_name.startswith("custom_lexers"):
+            lexer_name = lexer_name.split(".")[-1]
+        
+        lexer_dir = os.path.join(os.path.dirname(__file__), "lexer")
+        lexer_file = os.path.join(lexer_dir, f"{lexer_name}.json")
+
+        if not os.path.exists(lexer_file):
+            print(f"json for lexer {lexer_name} not found!")
+            return {}
+        
+        try:
             with open(lexer_file, "r") as file:
                 return json.load(file)
-        else:
-            # fallback
+        except json.JSONDecodeError as e:
+            print(f"error parsing JSON file for {lexer_file}! {e}")
             return {}
 
     def set_language(self, language):
@@ -458,7 +452,8 @@ class NotepadPy(QMainWindow):
         lexer_class = LANGUAGES.get(language)
         if lexer_class and self.tabs.currentWidget():
             editor = self.tabs.currentWidget()
-            lexer = lexer_class()
+
+            lexer = lexer_class(editor)
 
             scintilla_config = self.config.get("scintillaConfig", {})
             background_color = QColor(scintilla_config.get("color", "#FFFFFF"))
@@ -471,6 +466,7 @@ class NotepadPy(QMainWindow):
             lexer_colors = self.load_lexer_colors(lexer_name)
 
             for style in range(128): 
+                desc = lexer.description(style)
                 if lexer.description(style):
                     color = lexer_colors.get(lexer.description(style), font_color.name())
                     lexer.setColor(QColor(color), style)
@@ -481,12 +477,12 @@ class NotepadPy(QMainWindow):
             lexer.setPaper(background_color, lexer.Default)
             lexer.setColor(font_color, lexer.Default)
 
-            editor.setLexer(lexer)
-    
-            editor.setPaper(background_color)
-            editor.setColor(font_color)
             editor.setMarginsBackgroundColor(QColor(scintilla_config.get("margins_color", "#c0c0c0")))
             editor.setMarginsForegroundColor(QColor(font_color))
+
+            editor.setLexer(lexer)
+            editor.SendScintilla(QsciScintilla.SCI_COLOURISE, 0, editor.length())
+            print(f"setting language to {language} lexer: {lexer_class}")
             
     def close_tab(self, index):
         editor = self.tabs.widget(index)

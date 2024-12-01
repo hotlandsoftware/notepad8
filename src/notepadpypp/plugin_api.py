@@ -35,7 +35,7 @@ class PluginAPI:
         plugin_menu = plugins_menu.addMenu(plugin_name)
         return plugin_menu
 
-    ## Adds action (subsubmenu) to plugin
+    ## Adds action (subsubmenu) to Plugins Menu
     def add_action_to_plugin_menu(self, plugin_name, action_name, callback=None):
         """Adds an action under the specified plugin's submenu in the Plugins menu. Introduced in version: v0.0.1"""
         plugin_menu = self.add_to_plugin_menu(plugin_name)
@@ -71,5 +71,5 @@ class PluginAPI:
     
     ## Get NotepadPy++ version
     def get_program_version(self):
-        """Returns the current version of the program."""
+        """Returns the current version of the program. Introduced in version: v0.0.1"""
         return self.__version__

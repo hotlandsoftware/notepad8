@@ -1,0 +1,7 @@
+{
+    "Default": "#FFFFFF",
+    "Pointer Operations": "#FFCC00",
+    "Arithmetic Operations": "#008000",
+    "Loop Operations": "#FF0000",
+    "I/O Operations": "#0000FF"
+}

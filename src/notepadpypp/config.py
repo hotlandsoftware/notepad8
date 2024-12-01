@@ -23,7 +23,7 @@ DEFAULT_CONFIG = {
     "useRegex": False, # Use regular expressions in search
     "restoreFilesOnClose": True, # Restore files upon closing
     "openNewTabOnLastClosed": True, # When closing the last tab, open a new tab to replicate Notepad++ behavior
-    "lockTabs": True, # Add option to lock tabs
+    "lockTabs": False, # Add option to lock tabs
     "useQtDialogs": True, # For some reason KDE native dialogs won't work, so I added this option. Might be removed in future releases if I can fix the bug
     "scintillaConfig": {
         "color": "#ffffff", # background color
