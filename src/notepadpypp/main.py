@@ -2,6 +2,8 @@ import sys
 import os
 import json
 import re
+import hashlib 
+import time 
 
 from typing import Optional, Dict, Any
 
@@ -12,12 +14,12 @@ from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QFileDialog, QMessageBox, 
     QTabWidget, QInputDialog, QDialog, QMenuBar, QMenu
 )
-from PyQt6.QtCore import QCoreApplication, Qt, QSize
+from PyQt6.QtCore import QCoreApplication, Qt, QSize, QTimer
 from PyQt6.QtPrintSupport import QPrinter, QPrintDialog
 from PyQt6.QtNetwork import QLocalServer, QLocalSocket
 from PyQt6.Qsci import QsciScintilla, QsciLexer
 
-from config import initialize_config, save_config
+from config import Config, CONFIG_PATH
 from plugin_api import PluginAPI
 from file_types import get_lexer_for_file, LANGUAGES
 from plugin_manager import PluginManager
@@ -29,11 +31,17 @@ from charset_normalizer import from_bytes
 class NotepadPy(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.config = initialize_config()
+
+        # make backup path
+        self.backup_path = os.path.join(os.path.dirname(CONFIG_PATH), "backup")
+        os.makedirs(self.backup_path, exist_ok=True)
+
+        self.config = Config(CONFIG_PATH)
         self.file_paths = {}
+        self.backup_files = {}
         self.modified_tabs = {}
         self.tab_settings = {}
-        self.new_file_counter = 2
+        self.new_file_counter = 1
         self.last_search_options = None
 
         self.plugin_manager = PluginManager(self)
@@ -44,6 +52,7 @@ class NotepadPy(QMainWindow):
         self.plugin_manager.load_plugins()
 
         self.restore_session()
+        self.setup_backup_timer()
 
     def init_ui(self):
         """Initialize the main user interface."""
@@ -111,6 +120,9 @@ class NotepadPy(QMainWindow):
         about_action.setShortcut("F1")
         about_action.triggered.connect(self.show_about_box)
 
+    # Backup Saver
+    
+
     # Actions helper
     def add_actions_to_menu(self, menu, actions):
         """Helper to add actions to a menu."""
@@ -171,30 +183,90 @@ class NotepadPy(QMainWindow):
             action.setToolTip(tooltip)
             toolbar.addAction(action)
 
+    def save_backup(self, editor):
+        """Saves or updates a backup of a modified document."""
+        tab_index = self.tabs.indexOf(editor)
+        if tab_index == -1:
+            return
+
+        tab_title = self.tabs.tabText(tab_index).replace("&", "").lstrip("*")
+        content = editor.text()
+
+        backup_file = self.backup_files.get(editor)
+        if not backup_file:
+            timestamp = time.strftime("%Y-%m-%d_%H%M%S")
+            backup_file_name = f"{tab_title}@{timestamp}.bak"
+            backup_file = os.path.join(self.backup_path, backup_file_name)
+            self.backup_files[editor] = backup_file
+
+        content_hash = hashlib.md5(content.encode("utf-8")).hexdigest()
+        last_hash = getattr(editor, "last_backup_hash", None)
+        last_backup_time = getattr(editor, "last_backup_time", 0)
+
+        if content_hash == last_hash and (time.time() - last_backup_time) < 60:
+            return 
+            
+        with open(backup_file, "w", encoding="utf-8") as file:
+            file.write(content)
+
+        editor.last_backup_hash = content_hash
+        editor.last_backup_time = time.time()
+
+
+    def setup_backup_timer(self):
+        """Setup a timer to periodically save backups."""
+        self.backup_timer = QTimer(self)
+        self.backup_timer.timeout.connect(self.save_all_backups)
+        self.backup_timer.start(60000)
+    
+    def save_all_backups(self):
+        """Save backups for the modified documents"""
+        for i in range(self.tabs.count()):
+            editor = self.tabs.widget(i)
+            if isinstance(editor, QsciScintilla) and editor.isModified():
+                self.save_backup(editor)
+
     def restore_session(self):
-        """Restore open files from the previous session. TODO: Implement Notepad++ functionality where it restores modified files as well."""
+        """Restore open files from the previous session."""
         open_files = self.config.get("open_files", [])
 
         if self.config.get("restoreFilesOnClose", True):
-            for file_path in open_files:
+            for file_info in open_files:
+                file_path = file_info["file_path"]
+                is_modified = file_info.get("is_modified", False)
+                caret_position = file_info.get("caret_position", (0, 0))
+                lexer = file_info.get("lexer", "None")
+
                 try:
-                    with open(file_path, "r", encoding="utf-8") as file:
-                        content = file.read()
-                        editor = self.add_new_tab(content, os.path.basename(file_path), file_name=file_path)
-                    
-                        lexer_class = get_lexer_for_file(file_path)
-                        if lexer_class:
-                            language = next((language for language, cls in LANGUAGES.items() if cls == lexer_class), "None")
-                            self.set_language(language)
-                        else:
-                            self.set_language("None")
-                        editor.setModified(False) # TODO
-                except IOError:
-                    self.config["open_files"].remove(file_path)
-                    save_config(self.config)
-        else:
-            self.add_new_tab()
-                
+                    if os.path.exists(file_path):
+                        with open(file_path, "r", encoding="utf-8") as file:
+                            content = file.read()
+                    else:
+                        backups = [
+                            f for f in os.listdir(self.backup_path)
+                            if f.startswith(file_path) and "@" in f and f.endswith(".bak")
+                        ]
+                    if backups:
+                        latest_backup = max(backups, key=lambda f: os.path.getmtime(os.path.join(self.backup_path, f)))
+                        backup_file = os.path.join(self.backup_path, latest_backup)
+                        with open(backup_file, "r", encoding="utf-8") as file:
+                            content = file.read()
+                            is_modified = True
+                    else:
+                        continue
+
+                    editor = self.add_new_tab(content, os.path.basename(file_path), file_name=file_path)
+                    if is_modified:
+                        editor.setModified(True)
+                    if caret_position:
+                        editor.setCursorPosition(*caret_position)
+                    self.set_language(lexer)
+
+                except Exception as e:
+                    print(f"Failed to restore file {file_path}: {e}")
+                    self.config.remove_open_file(file_path)
+                    self.config.save()
+
         if not open_files:
             self.add_new_tab()
                 
@@ -208,11 +280,13 @@ class NotepadPy(QMainWindow):
 
         if file_name:
             self.set_tab_file_path(editor, file_name)
-            if file_name not in self.config["open_files"]:
-                self.config["open_files"].append(file_name)
-                save_config(self.config)
+        else:
+            file_name = f"new_{self.new_file_counter}"
+            self.new_file_counter += 1
 
         self.update_title()
+        self.config.add_open_file(file_name, is_modified=editor.isModified(), lexer="None")
+        self.config.save()
         editor.setModified(False)
         return editor
 
@@ -269,6 +343,7 @@ class NotepadPy(QMainWindow):
         editor.setFolding(QsciScintilla.FoldStyle.BoxedFoldStyle)
         editor.setAutoCompletionSource(QsciScintilla.AutoCompletionSource.AcsAll)
         editor.setAutoCompletionThreshold(2)
+
         editor.setIndentationsUseTabs(False)
         editor.setTabWidth(4) 
 
@@ -301,10 +376,32 @@ class NotepadPy(QMainWindow):
 
     # new file
     def new_file(self):
-        new_tab_title = f"new {self.new_file_counter}"
-        self.new_file_counter += 1
+        used_numbers = set()
+
+        for i in range(self.tabs.count()):
+            title = self.tabs.tabText(i).replace("&", "")  # Remove any stray ampersand
+            if title.startswith("new "):
+                try:
+                    num = int(title.split(" ")[1])
+                    used_numbers.add(num)
+                except (IndexError, ValueError):
+                    continue
+
+        for file_name in os.listdir(self.backup_path):
+            if file_name.startswith("new ") and "@" in file_name:
+                try:
+                    num = int(file_name.split(" ")[1].split("@")[0])
+                    used_numbers.add(num)
+                except (IndexError, ValueError):
+                    continue
+
+        new_number = 1
+        while new_number in used_numbers:
+            new_number += 1
+
+        new_tab_title = f"new {new_number}"
         self.add_new_tab(title=new_tab_title)
-    
+
     # open file (by path)
     def open_file_by_path(self, file_path): 
         """Opens a file by a path."""
@@ -346,6 +443,9 @@ class NotepadPy(QMainWindow):
                 else:
                     self.set_language("None")
 
+                self.config.add_open_file(file_path, is_modified=False, lexer=self.get_lexer_for_editor(editor))
+                print(f"Added to config: {file_path}, Modified: {editor.isModified()}, Lexer: {self.get_lexer_for_editor(editor)}")
+                self.config.save()
                 editor.setModified(False)
 
         except Exception as e:
@@ -373,6 +473,10 @@ class NotepadPy(QMainWindow):
                 editor.setModified(False)
                 self.modified_tabs[editor] = False 
                 self.update_tab_title(editor, file_path)
+
+                backup_file = os.path.join(self.backup_path, f"{file_path}.bak")
+                if os.path.exists(backup_file):
+                    os.remove(backup_file)
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Failed to save file!:\n{str(e)}")
         else:
@@ -387,6 +491,9 @@ class NotepadPy(QMainWindow):
                     editor.setModified(False)
                 self.set_tab_file_path(editor, file_path)
                 self.modified_tabs[editor] = False
+
+                self.config.add_open_file(file_path, is_modified=False, lexer=self.get_lexer_for_editor(editor))
+                self.config.save()
 
                 self.update_tab_title(editor, file_path)
                 self.update_title()
@@ -436,6 +543,13 @@ class NotepadPy(QMainWindow):
         except json.JSONDecodeError as e:
             print(f"error parsing JSON file for {lexer_file}! {e}")
             return {}
+
+    def get_lexer_for_editor(self, editor):
+        """Retrieve the current lexer for the given editor."""
+        lexer = editor.lexer()
+        if lexer:
+            return lexer.language()
+        return "None"
 
     def set_language(self, language):
         for lang, action in self.language_actions.items():
@@ -518,9 +632,9 @@ class NotepadPy(QMainWindow):
         if editor in self.file_paths:
             del self.file_paths[editor]
             
-        if file_path and file_path in self.config["open_files"]:
-            self.config["open_files"].remove(file_path)
-            save_config(self.config)
+        if file_path:
+            self.config.remove_open_file(file_path)
+            self.config.save()
 
         self.update_title()
         
