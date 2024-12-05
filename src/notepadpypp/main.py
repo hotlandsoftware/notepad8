@@ -192,26 +192,50 @@ class NotepadPy(QMainWindow):
         tab_title = self.tabs.tabText(tab_index).replace("&", "").lstrip("*")
         content = editor.text()
 
-        backup_file = self.backup_files.get(editor)
-        if not backup_file:
-            timestamp = time.strftime("%Y-%m-%d_%H%M%S")
-            backup_file_name = f"{tab_title}@{timestamp}.bak"
-            backup_file = os.path.join(self.backup_path, backup_file_name)
-            self.backup_files[editor] = backup_file
+        # Determine the backup base name
+        original_path = self.get_tab_file_path(editor)
+        if original_path:
+            backup_base_name = os.path.basename(original_path)
+        else:
+            backup_base_name = tab_title
 
+        if not backup_base_name.endswith(".bak"):
+            backup_base_name += ".bak"
+
+        timestamp = time.strftime("%Y-%m-%d_%H%M%S")
+        backup_file_name = f"{backup_base_name}"
+        backup_file = os.path.join(self.backup_path, backup_file_name)
+
+        # Avoid redundant writes
         content_hash = hashlib.md5(content.encode("utf-8")).hexdigest()
         last_hash = getattr(editor, "last_backup_hash", None)
         last_backup_time = getattr(editor, "last_backup_time", 0)
 
         if content_hash == last_hash and (time.time() - last_backup_time) < 60:
-            return 
+            return
             
         with open(backup_file, "w", encoding="utf-8") as file:
             file.write(content)
 
         editor.last_backup_hash = content_hash
         editor.last_backup_time = time.time()
+        print(f"Backup saved to: {backup_file}")
 
+        if original_path:
+            print(f"Saving backup for {original_path} as {backup_file}")
+            self.backup_files[original_path] = backup_file
+        else:
+            self.backup_files[tab_title] = backup_file
+
+        if original_path:
+            self.config.add_open_file(
+                file_path=original_path,
+                is_modified=editor.isModified(),
+                caret_position=editor.getCursorPosition(),
+                lexer=self.get_lexer_for_editor(editor)
+            )
+
+        self.config.save()
 
     def setup_backup_timer(self):
         """Setup a timer to periodically save backups."""
@@ -228,65 +252,81 @@ class NotepadPy(QMainWindow):
 
     def restore_session(self):
         """Restore open files from the previous session."""
+        backup_files = os.listdir(self.backup_path)
+        print(f"Backup files in directory: {backup_files}")
+
         open_files = self.config.get("open_files", [])
 
-        if self.config.get("restoreFilesOnClose", True):
-            for file_info in open_files:
-                file_path = file_info["file_path"]
-                is_modified = file_info.get("is_modified", False)
-                caret_position = file_info.get("caret_position", (0, 0))
-                lexer = file_info.get("lexer", "None")
+        for file_info in open_files:
+            file_path = file_info["file_path"]
+            is_modified = file_info.get("is_modified", False)
+            caret_position = file_info.get("caret_position", (0, 0))
+            lexer = file_info.get("lexer", "None")
 
-                try:
-                    if os.path.exists(file_path):
-                        with open(file_path, "r", encoding="utf-8") as file:
-                            content = file.read()
-                    else:
-                        backups = [
-                            f for f in os.listdir(self.backup_path)
-                            if f.startswith(file_path) and "@" in f and f.endswith(".bak")
-                        ]
-                    if backups:
-                        latest_backup = max(backups, key=lambda f: os.path.getmtime(os.path.join(self.backup_path, f)))
-                        backup_file = os.path.join(self.backup_path, latest_backup)
-                        with open(backup_file, "r", encoding="utf-8") as file:
-                            content = file.read()
-                            is_modified = True
-                    else:
-                        continue
+            backup_name = f"{os.path.basename(file_path)}.bak"
+            backup_file = os.path.join(self.backup_path, backup_name)
 
-                    editor = self.add_new_tab(content, os.path.basename(file_path), file_name=file_path)
-                    if is_modified:
-                        editor.setModified(True)
-                    if caret_position:
-                        editor.setCursorPosition(*caret_position)
-                    self.set_language(lexer)
-
-                except Exception as e:
-                    print(f"Failed to restore file {file_path}: {e}")
+            try:
+                if backup_name in backup_files:
+                    # Load from backup
+                    with open(backup_file, "r", encoding="utf-8") as backup:
+                        content = backup.read()
+                    print(f"Restoring {file_path or backup_name} from backup {backup_file}")
+                    tab_title = os.path.splitext(backup_name)[0]  # Remove .bak for tab title
+                elif os.path.exists(file_path):
+                    # Load from original file
+                    with open(file_path, "r", encoding="utf-8") as original:
+                        content = original.read()
+                    print(f"Restoring {file_path} from original file")
+                    tab_title = os.path.basename(file_path)
+                else:
+                    # No backup or original file
+                    print(f"No backup or original file found for {file_path}. Removing from config.")
                     self.config.remove_open_file(file_path)
-                    self.config.save()
+                    continue
 
-        if not open_files:
-            self.add_new_tab()
-                
+                # Restore the tab
+                editor = self.add_new_tab(content, tab_title, file_name=file_path)
+                editor.blockSignals(True)
+                editor.setText(content)
+                editor.blockSignals(False)
+
+                # Apply settings
+                if is_modified:
+                    editor.setModified(True)
+                if caret_position:
+                    editor.setCursorPosition(*caret_position)
+
+                self.set_language(lexer)
+            except Exception as e:
+                print(f"Failed to restore {file_path or backup_name}: {e}")
+
+
     def add_new_tab(self, content="", title="new 1", file_name=""):
+        if not file_name:
+            title = f"new {self.new_file_counter}"
+            self.new_file_counter += 1
+            timestamp = time.strftime("%Y-%m-%d")
+            file_name = os.path.join(self.backup_path, f"{title}@{timestamp}.bak")
+
         editor = self.create_editor(content, file_name)
         editor.blockSignals(True)
         editor.setText(content)
         editor.blockSignals(False)
+
         index = self.tabs.addTab(editor, title)
         self.tabs.setCurrentIndex(index)
 
         if file_name:
             self.set_tab_file_path(editor, file_name)
-        else:
-            file_name = f"new_{self.new_file_counter}"
-            self.new_file_counter += 1
 
-        self.update_title()
-        self.config.add_open_file(file_name, is_modified=editor.isModified(), lexer="None")
+        if title not in self.backup_files:
+            self.backup_files[title] = file_name
+
+        self.config.add_open_file(file_path=file_name, is_modified=editor.isModified(), caret_position=editor.getCursorPosition(), lexer="None")
+        
         self.config.save()
+        self.update_title()
         editor.setModified(False)
         return editor
 
@@ -464,23 +504,26 @@ class NotepadPy(QMainWindow):
         self.open_file_by_path(file_path)
                 
     def save_file(self, editor):
+        """Saves the current file."""
         file_path = self.get_tab_file_path(editor)
-        if file_path:
-            try:
-                with open(file_path, "w", encoding="utf-8", newline='') as file: # TODO
-                    file.write(editor.text())
-                
-                editor.setModified(False)
-                self.modified_tabs[editor] = False 
-                self.update_tab_title(editor, file_path)
-
-                backup_file = os.path.join(self.backup_path, f"{file_path}.bak")
-                if os.path.exists(backup_file):
-                    os.remove(backup_file)
-            except Exception as e:
-                QMessageBox.critical(self, "Error", f"Failed to save file!:\n{str(e)}")
-        else:
+        if not file_path:
             self.save_file_as(editor)
+            return
+
+        try:
+            with open(file_path, "w", encoding="utf-8") as file:
+                file.write(editor.text())
+
+            backup_file = self.backup_files.pop(file_path, None)
+            if backup_file and os.path.exists(backup_file):
+                os.remove(backup_file)
+
+            editor.setModified(False)
+            print(f"File saved: {file_path}")
+
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to save file '{file_path}': {e}")
+
             
     def save_file_as(self, editor):
         file_path, _ = QFileDialog.getSaveFileName(self, "Save File", "", "All Files (*)")
@@ -635,7 +678,7 @@ class NotepadPy(QMainWindow):
         if file_path:
             self.config.remove_open_file(file_path)
             self.config.save()
-
+            
         self.update_title()
         
         if self.tabs.count() == 0:
