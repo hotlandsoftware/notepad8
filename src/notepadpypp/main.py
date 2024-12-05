@@ -192,7 +192,6 @@ class NotepadPy(QMainWindow):
         tab_title = self.tabs.tabText(tab_index).replace("&", "").lstrip("*")
         content = editor.text()
 
-        # Determine the backup base name
         original_path = self.get_tab_file_path(editor)
         if original_path:
             backup_base_name = os.path.basename(original_path)
@@ -202,18 +201,15 @@ class NotepadPy(QMainWindow):
         if not backup_base_name.endswith(".bak"):
             backup_base_name += ".bak"
 
-        timestamp = time.strftime("%Y-%m-%d_%H%M%S")
-        backup_file_name = f"{backup_base_name}"
-        backup_file = os.path.join(self.backup_path, backup_file_name)
+        backup_file = os.path.join(self.backup_path, backup_base_name)
 
-        # Avoid redundant writes
         content_hash = hashlib.md5(content.encode("utf-8")).hexdigest()
         last_hash = getattr(editor, "last_backup_hash", None)
         last_backup_time = getattr(editor, "last_backup_time", 0)
 
         if content_hash == last_hash and (time.time() - last_backup_time) < 60:
             return
-            
+
         with open(backup_file, "w", encoding="utf-8") as file:
             file.write(content)
 
@@ -241,7 +237,7 @@ class NotepadPy(QMainWindow):
         """Setup a timer to periodically save backups."""
         self.backup_timer = QTimer(self)
         self.backup_timer.timeout.connect(self.save_all_backups)
-        self.backup_timer.start(60000)
+        self.backup_timer.start(1000)
     
     def save_all_backups(self):
         """Save backups for the modified documents"""
@@ -306,8 +302,7 @@ class NotepadPy(QMainWindow):
         if not file_name:
             title = f"new {self.new_file_counter}"
             self.new_file_counter += 1
-            timestamp = time.strftime("%Y-%m-%d")
-            file_name = os.path.join(self.backup_path, f"{title}@{timestamp}.bak")
+            file_name = os.path.join(self.backup_path, f"{title}.bak")
 
         editor = self.create_editor(content, file_name)
         editor.blockSignals(True)
@@ -416,10 +411,11 @@ class NotepadPy(QMainWindow):
 
     # new file
     def new_file(self):
+        """Create a new unsaved tab with a unique name."""
         used_numbers = set()
-
+        
         for i in range(self.tabs.count()):
-            title = self.tabs.tabText(i).replace("&", "")  # Remove any stray ampersand
+            title = self.tabs.tabText(i).replace("&", "")
             if title.startswith("new "):
                 try:
                     num = int(title.split(" ")[1])
@@ -428,9 +424,9 @@ class NotepadPy(QMainWindow):
                     continue
 
         for file_name in os.listdir(self.backup_path):
-            if file_name.startswith("new ") and "@" in file_name:
+            if file_name.startswith("new ") and file_name.endswith(".bak"):
                 try:
-                    num = int(file_name.split(" ")[1].split("@")[0])
+                    num = int(file_name.split(" ")[1].split("@")[0]) 
                     used_numbers.add(num)
                 except (IndexError, ValueError):
                     continue
@@ -438,6 +434,8 @@ class NotepadPy(QMainWindow):
         new_number = 1
         while new_number in used_numbers:
             new_number += 1
+
+        self.new_file_counter = new_number + 1
 
         new_tab_title = f"new {new_number}"
         self.add_new_tab(title=new_tab_title)
