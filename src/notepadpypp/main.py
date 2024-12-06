@@ -237,7 +237,7 @@ class NotepadPy(QMainWindow):
         """Setup a timer to periodically save backups."""
         self.backup_timer = QTimer(self)
         self.backup_timer.timeout.connect(self.save_all_backups)
-        self.backup_timer.start(1000)
+        self.backup_timer.start(60000)
     
     def save_all_backups(self):
         """Save backups for the modified documents"""
@@ -299,9 +299,8 @@ class NotepadPy(QMainWindow):
 
 
     def add_new_tab(self, content="", title="new 1", file_name=""):
+        """Add a new tab to the editor."""
         if not file_name:
-            title = f"new {self.new_file_counter}"
-            self.new_file_counter += 1
             file_name = os.path.join(self.backup_path, f"{title}.bak")
 
         editor = self.create_editor(content, file_name)
@@ -319,8 +318,8 @@ class NotepadPy(QMainWindow):
             self.backup_files[title] = file_name
 
         self.config.add_open_file(file_path=file_name, is_modified=editor.isModified(), caret_position=editor.getCursorPosition(), lexer="None")
-        
         self.config.save()
+
         self.update_title()
         editor.setModified(False)
         return editor
@@ -413,7 +412,7 @@ class NotepadPy(QMainWindow):
     def new_file(self):
         """Create a new unsaved tab with a unique name."""
         used_numbers = set()
-        
+
         for i in range(self.tabs.count()):
             title = self.tabs.tabText(i).replace("&", "")
             if title.startswith("new "):
@@ -424,9 +423,9 @@ class NotepadPy(QMainWindow):
                     continue
 
         for file_name in os.listdir(self.backup_path):
-            if file_name.startswith("new ") and file_name.endswith(".bak"):
+            if file_name.startswith("new ") and (file_name.endswith(".bak") or "@" in file_name):
                 try:
-                    num = int(file_name.split(" ")[1].split("@")[0]) 
+                    num = int(file_name.split(" ")[1].split(".")[0].split("@")[0])  # Extract number from backup filenames
                     used_numbers.add(num)
                 except (IndexError, ValueError):
                     continue
@@ -438,7 +437,8 @@ class NotepadPy(QMainWindow):
         self.new_file_counter = new_number + 1
 
         new_tab_title = f"new {new_number}"
-        self.add_new_tab(title=new_tab_title)
+        file_path = os.path.join(self.backup_path, f"{new_tab_title}.bak")
+        self.add_new_tab(title=new_tab_title, file_name=file_path)
 
     # open file (by path)
     def open_file_by_path(self, file_path): 
