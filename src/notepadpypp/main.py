@@ -1,5 +1,6 @@
 import sys
 import os
+import subprocess
 import json
 import re
 import hashlib 
@@ -7,17 +8,43 @@ import time
 
 from typing import Optional, Dict, Any
 
-from PyQt6.QtGui import ( 
-    QFont, QColor, QTextDocument, QIcon, QAction
-)
-from PyQt6.QtWidgets import (
-    QApplication, QMainWindow, QFileDialog, QMessageBox, 
-    QTabWidget, QInputDialog, QDialog, QMenuBar, QMenu
-)
-from PyQt6.QtCore import QCoreApplication, Qt, QSize, QTimer
-from PyQt6.QtPrintSupport import QPrinter, QPrintDialog
-from PyQt6.QtNetwork import QLocalServer, QLocalSocket
-from PyQt6.Qsci import QsciScintilla, QsciLexer
+try:
+    from PyQt6.QtGui import ( 
+        QFont, QColor, QTextDocument, QIcon, QAction
+    )
+
+    from PyQt6.QtWidgets import (
+        QApplication, QMainWindow, QFileDialog, QMessageBox, 
+        QTabWidget, QInputDialog, QDialog, QMenuBar, QMenu
+    )
+
+    from PyQt6.QtCore import QCoreApplication, Qt, QSize, QTimer
+except ImportError as e:
+    print(f"PyQt6 import failed! {e}")
+    raise SystemExit("PyQt6 is required to run Notepad8. Please refer to your distro's manual for instructions.")
+
+try:
+    from PyQt6.Qsci import QsciScintilla, QsciLexer
+except ImportError as e:
+    print(f"Scintilla import failed! {e}")
+    raise SystemExit("QsciScintilla is required to run Notepad8. Please refer to your distro's manual for instructions.")
+
+print_support = True
+network_support = True 
+# used numbers
+used_numbers = set()
+
+try:
+    from PyQt6.QtPrintSupport import QPrinter, QPrintDialog
+except ImportError:
+    print_support = False 
+    print(f"Failed to import QtPrintSupport. {e}\nPrinting functions will be unavailable.")
+
+try:
+    from PyQt6.QtNetwork import QLocalServer, QLocalSocket
+except ImportError:
+    network_support = False 
+    print(f"Failed to import QtNetwork. {e}\nNetworking functions will be unavailable.")
 
 from config import Config, CONFIG_PATH
 from plugin_api import PluginAPI
@@ -56,7 +83,7 @@ class NotepadPy(QMainWindow):
 
     def init_ui(self):
         """Initialize the main user interface."""
-        self.setWindowTitle("NotepadPy++")
+        self.setWindowTitle("Notepad8")
         self.resize(800, 600)
         self.tabs = QTabWidget(self)
         self.tabs.setTabsClosable(True)
@@ -86,11 +113,26 @@ class NotepadPy(QMainWindow):
             ("New", "Ctrl+N", self.new_file, "icons/new.png"),
             ("Open", "Ctrl+O", self.open_file_dialog, "icons/open.png"),
             ("Save", "Ctrl+S", self.save_current_file, "icons/save.png"),
-            ("Save As", "Ctrl+Shift+S", self.save_current_file_as, "icons/save_as.png"),
+            ("Save As...", "Ctrl+Shift+S", self.save_current_file_as, "icons/save_as.png"),
+            ("Save Copy...", "Ctrl+Shift+F6", self.save_current_file_as_copy, "icons/save_as.png"),
             ("Print", "Ctrl+P", self.print_file, "icons/print.png"),
+            ("_Launch", None, None, [("New Window...", "Ctrl+Shift+N", self.launch_new_window, None)]),
             ("Exit", "Alt+F4", self.close_program, None)
         ]
         self.add_actions_to_menu(file_menu, file_actions)
+
+        # Edit Menu
+        edit_menu = menu_bar.addMenu("Edit")
+        edit_actions = [
+            ("Undo", "Ctrl+Z", self.plugin_api.undo, None),
+            ("Redo", "Ctrl+R", self.plugin_api.redo, None),
+            ("Cut", "Ctrl+X", self.plugin_api.cut, None),
+            ("Copy", "Ctrl+C", self.plugin_api.copy, None),
+            ("Paste", "Ctrl+V", self.plugin_api.paste, None),
+            ("Delete", "Del", self.plugin_api.delete_selection, None),
+            ("Select All", "Del", self.plugin_api.select_all, None),
+        ]
+        self.add_actions_to_menu(edit_menu, edit_actions)
 
         # Search Menu
         search_menu = menu_bar.addMenu("Search")
@@ -120,20 +162,27 @@ class NotepadPy(QMainWindow):
         about_action.setShortcut("F1")
         about_action.triggered.connect(self.show_about_box)
 
-    # Backup Saver
-    
-
     # Actions helper
     def add_actions_to_menu(self, menu, actions):
         """Helper to add actions to a menu."""
         for name, shortcut, handler, icon in actions:
-            if icon:
-                action = menu.addAction(QIcon(icon), name)
-            else:
-                action = menu.addAction(name)
+            if isinstance(icon, list):
+                submenu = menu.addMenu(name.replace("_", ""))
+                self.add_actions_to_menu(submenu, icon)
+                continue
+
+            if name is None:
+                menu.addSeparator()
+                continue
+
+            action = menu.addAction(name)
             if shortcut:
                 action.setShortcut(shortcut)
-            action.triggered.connect(handler)
+            if handler:
+                action.triggered.connect(handler)
+            if icon and isinstance(icon, str):
+                action.setIcon(QIcon(icon))
+
 
     # Create language menu
     def create_language_menu(self, language_menu):
@@ -160,7 +209,7 @@ class NotepadPy(QMainWindow):
                 
     def create_toolbar(self):
         """Creates the toolbar below the menu."""
-        toolbar = self.addToolBar("Main")
+        toolbar = self.addToolBar("Main Menu")
         toolbar.setMovable(False) # todo: add an unlocking feature
 
         toolbar.setIconSize(QSize(16, 16))
@@ -215,10 +264,10 @@ class NotepadPy(QMainWindow):
 
         editor.last_backup_hash = content_hash
         editor.last_backup_time = time.time()
-        print(f"Backup saved to: {backup_file}")
+        self.plugin_api.log(f"Backup saved to: {backup_file}")
 
         if original_path:
-            print(f"Saving backup for {original_path} as {backup_file}")
+            self.plugin_api.log(f"Saving backup for {original_path} as {backup_file}")
             self.backup_files[original_path] = backup_file
         else:
             self.backup_files[tab_title] = backup_file
@@ -249,9 +298,16 @@ class NotepadPy(QMainWindow):
     def restore_session(self):
         """Restore open files from the previous session."""
         backup_files = os.listdir(self.backup_path)
-        print(f"Backup files in directory: {backup_files}")
+        self.plugin_api.log(f"Backup files found in directory: {backup_files}")
 
-        open_files = self.config.get("open_files", [])
+        open_files = [
+            f for f in self.config.get("open_files", [])
+            if os.path.exists(f["file_path"])
+        ]
+        self.config.data["open_files"] = open_files
+        self.config.save()
+
+        restored_any = False
 
         for file_info in open_files:
             file_path = file_info["file_path"]
@@ -259,44 +315,57 @@ class NotepadPy(QMainWindow):
             caret_position = file_info.get("caret_position", (0, 0))
             lexer = file_info.get("lexer", "None")
 
-            backup_name = f"{os.path.basename(file_path)}.bak"
-            backup_file = os.path.join(self.backup_path, backup_name)
-
             try:
-                if backup_name in backup_files:
-                    # Load from backup
-                    with open(backup_file, "r", encoding="utf-8") as backup:
-                        content = backup.read()
-                    print(f"Restoring {file_path or backup_name} from backup {backup_file}")
-                    tab_title = os.path.splitext(backup_name)[0]  # Remove .bak for tab title
-                elif os.path.exists(file_path):
-                    # Load from original file
-                    with open(file_path, "r", encoding="utf-8") as original:
-                        content = original.read()
-                    print(f"Restoring {file_path} from original file")
-                    tab_title = os.path.basename(file_path)
-                else:
-                    # No backup or original file
-                    print(f"No backup or original file found for {file_path}. Removing from config.")
-                    self.config.remove_open_file(file_path)
-                    continue
+                is_temp_backup = (
+                    file_path.endswith(".bak") and # check for 'new '?
+                    os.path.dirname(file_path) == self.backup_path
+                )
 
-                # Restore the tab
-                editor = self.add_new_tab(content, tab_title, file_name=file_path)
+                if is_temp_backup:
+                    with open(file_path, "r", encoding="utf-8") as fh:
+                        content = fh.read()
+                    tab_title = os.path.splitext(os.path.basename(file_path))[0]
+
+                    editor = self.add_new_tab(content, tab_title, file_name=file_path)
+                
+                else:
+                    backup_name = f"{os.path.basename(file_path)}.bak"
+                    backup_file = os.path.join(self.backup_path, backup_name)
+                    
+                    if os.path.exists(backup_file):
+                        with open(backup_file, "r", encoding="utf-8") as fh:
+                            content = fh.read()
+                        self.plugin_api.log(f"Restoring {file_path} from backup {backup_file}")
+                    elif os.path.exists(file_path):
+                        with open(file_path, "r", encoding="utf-8") as fh:
+                            content = fh.read()
+                        self.plugin_api.log(f"Restoring {file_path} from original file")
+                    else:
+                        self.plugin_api.log(f"No backup or original for {file_path}. Removing from config.")
+                        self.config.remove_open_file(file_path)
+                        continue
+
+                    tab_title = os.path.basename(file_path)
+                    editor = self.add_new_tab(content, tab_title, file_name=file_path)
+
                 editor.blockSignals(True)
                 editor.setText(content)
                 editor.blockSignals(False)
 
-                # Apply settings
                 if is_modified:
                     editor.setModified(True)
                 if caret_position:
                     editor.setCursorPosition(*caret_position)
 
                 self.set_language(lexer)
+                restored_any = True
+                
             except Exception as e:
-                print(f"Failed to restore {file_path or backup_name}: {e}")
+                self.plugin_api.log(f"Failed to restore {file_path or backup_name}: {e}")
 
+        if not restored_any:
+            self.plugin_api.log("no files to restore; opening new blank tab")
+            self.add_new_tab()
 
     def add_new_tab(self, content="", title="new 1", file_name=""):
         """Add a new tab to the editor."""
@@ -322,6 +391,7 @@ class NotepadPy(QMainWindow):
 
         self.update_title()
         editor.setModified(False)
+
         return editor
 
     def create_editor(self, content="", file_name=""):
@@ -395,7 +465,7 @@ class NotepadPy(QMainWindow):
         current_tab = self.tabs.currentWidget()
         if current_tab:
             file_name = self.tabs.tabText(self.tabs.currentIndex()).replace("&", "") # ugly hack, but it adds an & and I cannot for the life of me figure out why
-            self.setWindowTitle(f"{file_name} - NotepadPy++")
+            self.setWindowTitle(f"{file_name} - Notepad8")
 
     def text_changed(self):
         current_tab_index = self.tabs.currentIndex()
@@ -410,37 +480,36 @@ class NotepadPy(QMainWindow):
 
     # new file
     def new_file(self):
-        """Create a new unsaved tab with a unique name."""
-        used_numbers = set()
+        """Creates a new tab with the next available number."""
+        pattern = re.compile(r"^new (\d+)", re.IGNORECASE)
 
         for i in range(self.tabs.count()):
             title = self.tabs.tabText(i).replace("&", "")
-            if title.startswith("new "):
-                try:
-                    num = int(title.split(" ")[1])
-                    used_numbers.add(num)
-                except (IndexError, ValueError):
-                    continue
+            match = pattern.match(title)
+            if match:
+                used_numbers.add(int(match.group(1)))
 
         for file_name in os.listdir(self.backup_path):
-            if file_name.startswith("new ") and (file_name.endswith(".bak") or "@" in file_name):
-                try:
-                    num = int(file_name.split(" ")[1].split(".")[0].split("@")[0])  # Extract number from backup filenames
-                    used_numbers.add(num)
-                except (IndexError, ValueError):
-                    continue
+            match = pattern.match(file_name)
+            if match:
+                used_numbers.add(int(match.group(1)))
+
+        for file_info in self.config.get("open_files", []):
+            base = os.path.basename(file_info["file_path"])
+            match = pattern.match(base)
+            if match:
+                used_numbers.add(int(match.group(1)))
 
         new_number = 1
         while new_number in used_numbers:
             new_number += 1
 
-        self.new_file_counter = new_number + 1
-
         new_tab_title = f"new {new_number}"
         file_path = os.path.join(self.backup_path, f"{new_tab_title}.bak")
+
+        self.plugin_api.log(f"Creating new tab: {new_tab_title}")
         self.add_new_tab(title=new_tab_title, file_name=file_path)
 
-    # open file (by path)
     def open_file_by_path(self, file_path): 
         """Opens a file by a path."""
         if not file_path:
@@ -448,16 +517,15 @@ class NotepadPy(QMainWindow):
 
         for editor, path in self.file_paths.items():
             if path == file_path:
-                QMessageBox.critical(
-                    self, "Error", f"The file {os.path.basename(file_path)} is already open"
+                self.plugin_api.show_error(
+                    "Error", f"The file {os.path.basename(file_path)} is already open"
                 )
                 return 
         try:
-            with open(file_path, "rb") as file:  # Open in binary mode
+            with open(file_path, "rb") as file:
                 binary_content = file.read()
 
-                # TODO: also do this on restore session, saving files, etc
-                detected = from_bytes(binary_content).best() # use charset-normalizer to get the best encoding
+                detected = from_bytes(binary_content).best()
 
                 if detected:
                     encoding = detected.encoding
@@ -471,7 +539,6 @@ class NotepadPy(QMainWindow):
                 editor = self.add_new_tab(content, os.path.basename(file_path), file_name=file_path)
                 editor.setText(content)
 
-                # Set language for the file
                 lexer_class = get_lexer_for_file(file_path)
                 if lexer_class:
                     for language, cls in LANGUAGES.items():
@@ -482,12 +549,12 @@ class NotepadPy(QMainWindow):
                     self.set_language("None")
 
                 self.config.add_open_file(file_path, is_modified=False, lexer=self.get_lexer_for_editor(editor))
-                print(f"Added to config: {file_path}, Modified: {editor.isModified()}, Lexer: {self.get_lexer_for_editor(editor)}")
+                self.plugin_api.log(f"Added to config: {file_path}, Modified: {editor.isModified()}, Lexer: {self.get_lexer_for_editor(editor)}")
                 self.config.save()
                 editor.setModified(False)
 
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to open file '{file_path}':\n{str(e)}")
+            self.plugin_api.show_error("Error", f"Failed to open file '{file_path}':\n{str(e)}")
 
     # open file dialog
     def open_file_dialog(self):
@@ -498,7 +565,7 @@ class NotepadPy(QMainWindow):
 
     # open file (dropped)
     def open_dropped_file(self, file_path):
-        """Handles a file dropped into Notepadpypp."""
+        """Handles a file dropped into Notepad8."""
         self.open_file_by_path(file_path)
                 
     def save_file(self, editor):
@@ -517,10 +584,10 @@ class NotepadPy(QMainWindow):
                 os.remove(backup_file)
 
             editor.setModified(False)
-            print(f"File saved: {file_path}")
+            self.plugin_api.log(f"File saved: {file_path}")
 
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to save file '{file_path}': {e}")
+            self.plugin_api.show_error("Error", f"Failed to save file '{file_path}': {e}")
 
             
     def save_file_as(self, editor):
@@ -539,7 +606,21 @@ class NotepadPy(QMainWindow):
                 self.update_tab_title(editor, file_path)
                 self.update_title()
             except Exception as e:
-                QMessageBox.critical(self, "Error", f"Failed to save file!:\n{str(e)}")
+                self.plugin_api.show_error("Error", f"Failed to save file!:\n{str(e)}")
+            
+    def save_file_as_copy(self, editor):
+        file_path, _ = QFileDialog.getSaveFileName(self, "Save Copy As", "", "All Files (*)")
+        if not file_path:
+            return
+
+        try:
+            with open(file_path, "w", encoding="utf-8", newline='') as file:
+                file.write(editor.text())
+
+            self.plugin_api.log(f"Saved copy of current file to: {file_path}")
+
+        except Exception as e:
+            self.plugin_api.show_error("Error", f"Failed to save file copy:\n{file_path}", e)
                 
     def save_current_file(self):
         editor = self.tabs.currentWidget()
@@ -550,6 +631,11 @@ class NotepadPy(QMainWindow):
         editor = self.tabs.currentWidget()
         if isinstance(editor, QsciScintilla):
             self.save_file_as(editor)
+
+    def save_current_file_as_copy(self):
+        editor = self.tabs.currentWidget()
+        if isinstance(editor, QsciScintilla):
+            self.save_file_as_copy(editor)
 
     # drag event
     def dragEnterEvent(self, event):
@@ -575,14 +661,14 @@ class NotepadPy(QMainWindow):
         lexer_file = os.path.join(lexer_dir, f"{lexer_name}.json")
 
         if not os.path.exists(lexer_file):
-            print(f"json for lexer {lexer_name} not found!")
+            self.plugin_api.log(f"json for lexer {lexer_name} not found!")
             return {}
         
         try:
             with open(lexer_file, "r") as file:
                 return json.load(file)
         except json.JSONDecodeError as e:
-            print(f"error parsing JSON file for {lexer_file}! {e}")
+            self.plugin_api.log(f"error parsing JSON file for {lexer_file}! {e}")
             return {}
 
     def get_lexer_for_editor(self, editor):
@@ -640,13 +726,16 @@ class NotepadPy(QMainWindow):
 
             editor.setLexer(lexer)
             editor.SendScintilla(QsciScintilla.SCI_COLOURISE, 0, editor.length())
+            editor.SendScintilla(editor.SCI_SETCARETLINEVISIBLE, True)
+            editor.SendScintilla(editor.SCI_SETSEL, 0, 0)
+            editor.repaint()
 
             self.tab_settings[editor] = {
                 'language': language,
                 'font': font
             }
 
-            print(f"setting language to {language} lexer: {lexer_class}")
+            self.plugin_api.log(f"setting language to {language} lexer: {lexer_class}")
             
     def close_tab(self, index):
         editor = self.tabs.widget(index)
@@ -656,7 +745,7 @@ class NotepadPy(QMainWindow):
             reply = QMessageBox.question(
                 self, 
                 "Save", 
-                "Save file?",
+                "Do you want to save the file?",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel
             )
     
@@ -664,7 +753,15 @@ class NotepadPy(QMainWindow):
                 self.save_file(editor)
                 self.tabs.removeTab(index)
             elif reply == QMessageBox.StandardButton.No:
+                if file_path and file_path.startswith(self.backup_path):
+                    try:
+                        os.remove(file_path)
+                        self.plugin_api.log(f"Deleted unsaved backup file: {file_path}")
+                    except Exception as e:
+                        self.plugin_api.show_error("Cleanup Error", f"Failed to delete {file_path}", e)
                 self.tabs.removeTab(index)
+            else:
+                return # cancelled
         else:
             self.tabs.removeTab(index)
     
@@ -676,6 +773,13 @@ class NotepadPy(QMainWindow):
         if file_path:
             self.config.remove_open_file(file_path)
             self.config.save()
+
+            if file_path.startswith(self.backup_path) and os.path.exists(file_path):
+                try:
+                    os.remove(file_path)
+                    self.plugin_api.log(f"Deleted backup after closing tab: {file_path}")
+                except Exception as e:
+                    self.plugin_api.show_error("Cleanup Error", f"Failed to delete backup file {file_path}", e)
             
         self.update_title()
         
@@ -692,7 +796,7 @@ class NotepadPy(QMainWindow):
             self.tabs.setTabText(index, tab_name)
             
     def close_program(self):
-        save_config(self.config)
+        self.config.save()
         self.close()
 
     def toggle_word_wrap(self, checked):
@@ -703,8 +807,8 @@ class NotepadPy(QMainWindow):
             else:
                 current_editor.setWrapMode(QsciScintilla.WrapMode.WrapNone)
         
-        self.config["wordWrap"] = checked
-        save_config(self.config)
+        self.config.set("wordWrap", checked)
+        self.config.save()
         
     def word_wrap_all_tabs(self):
         wrap_enabled = self.config.get("wordWrap", False)
@@ -779,6 +883,10 @@ class NotepadPy(QMainWindow):
     def print_file(self):
         """Opens the print dialog box."""
         # TODO: i could not figure out how to print from Scintilla, so this will lack syntax highlighting for now
+        if not print_support:
+            self.plugin_api.show_error("Printing Unavailable", "QtPrintSupport failed to load. Printing is unavailable for this session. Refer to your distro's manual for further instructions.")
+            return
+
         editor = self.tabs.currentWidget()
         if not isinstance(editor, QsciScintilla):
             return
@@ -808,8 +916,8 @@ class NotepadPy(QMainWindow):
         """Displays the about box for the program."""
         QMessageBox.about(
             self,
-            "About NotepadPy++",
-            "<h3><center>NotepadPy++ v0.0.1</center></h3>"
+            "About Notepad8",
+            "<h3><center>Notepad8 v0.0.1</center></h3>"
             "<p>The ass-backwards Notepad++ clone for *nix!</p>"
             "<p>By Hotlands Software</p>"
             "<p><b>THIS PROGRAM IS UNSTABLE</b>. It may crash, break, and future updates might not be compatible with eachother!!!</p>"
@@ -833,7 +941,7 @@ class NotepadPy(QMainWindow):
             options = dialog.get_search_options()
             self.config["wrapAroundSearch"] = options["wrap_around"]
             self.config["useRegex"] = options["use_regex"]
-            save_config(self.config)
+            self.config.save()
             self.last_search_options = options
             self.find_text_in_editor(editor, options)
 
@@ -861,7 +969,7 @@ class NotepadPy(QMainWindow):
         current_position = editor.SendScintilla(QsciScintilla.SCI_GETCURRENTPOS)
 
         if self.config.get("debugMode", True):
-            print(f"Searching '{search_text}' | Regex: {use_regex} | Match case: {match_case} | Wrap around: {wrap_around} | Direction: {'down' if forward else 'up'}")
+            self.plugin_api.log(f"Searching '{search_text}' | Regex: {use_regex} | Match case: {match_case} | Wrap around: {wrap_around} | Direction: {'down' if forward else 'up'}")
     
         flags = 0 if match_case else re.IGNORECASE
         
@@ -901,7 +1009,7 @@ class NotepadPy(QMainWindow):
                 else:
                     QMessageBox.information(self, "Find", f"'{search_text}' not found {direction_text} from the caret position.")
         except re.error as e:
-            QMessageBox.critical(self, "Regex Error", f"Invalid regular expression: {e}")
+            self.plugin_api.show_error("Regex Error", f"Invalid regular expression: {e}")
 
             
     def find_next(self):
@@ -924,6 +1032,17 @@ class NotepadPy(QMainWindow):
         options = self.get_last_search()
         options["direction"] = "up"
         self.find_text_in_editor(editor, options)
+    
+    def launch_new_window(self):
+        """Launches a new Notepad8 instance."""
+        win = NotepadPy()
+        app = QApplication.instance()
+
+        if not hasattr(app, "_np_windows"):
+            app._np_windows = []
+        app._np_windows.append(win)
+
+        win.show()
         
 
 # only allow a single instance to run
@@ -945,20 +1064,12 @@ def setup_single_instance_server(app_id="NotepadPy"):
         
         if existing_instance.waitForConnected(1000):
             # todo: make it focus on window, like notepad++ does
-            if self.config.get("debugMode", True):
-                print("ERROR: Only one insance of NotepadPy++ can run at a time")
-            QMessageBox.critical(
-                None, "Error", "Only one instance of NotepadPy++ can run at a time"
-            )
+            print("Only one insance of NotepadPy++ can run at a time")
             sys.exit(0)
         else:
             QLocalServer.removeServer(app_id)
             if not server.listen(app_id):
-                if self.config.get("debugMode", True):
-                    print("ERROR: Failed to create server")
-                QMessageBox.critical(
-                    None, "Error", "Failed to create server"
-                )
+                print("Failed to create server")
                 sys.exit(1)
                 
     return server

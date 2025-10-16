@@ -1,11 +1,16 @@
+import logging
 from PyQt6.QtWidgets import QMenu, QMessageBox
-
 
 class PluginAPI:
     def __init__(self, app, plugin_manager):
         self.app = app
         self.plugin_manager = plugin_manager
         self.__version__ = "0.0.1"
+        logging.basicConfig(
+            level=logging.DEBUG if getattr(app, "config", {}).get("debugMode", False) else logging.INFO,
+            format="%(asctime)s [%(levelname)s] %(message)s"
+        )
+        self.logger = logging.getLogger("NotepadPypp")
 
     ## Creates the Plugins Menu
     def create_plugins_menu(self, plugins_menu):
@@ -68,8 +73,142 @@ class PluginAPI:
             return current_editor.text()
         else:
             return None
+
+    ## Log
+    def log(self, message: str, level: str = "info"):
+        """Logs a message to the console. Introduced in version: v0.0.1"""
+        if hasattr(self.logger, level):
+            getattr(self.logger, level)(message)
+        else:
+            self.logger.info(message)
+
+    ## Show Error
+    def show_error(self, title, message, exc=None):
+        """Shows error box. Introduced in version: v0.0.1"""
+        full_msg = message
+        if exc:
+            full_msg += f"\n\n{type(exc).__name__}: {exc}"
+            self.logger.error(f"{title}: {exc}", exc_info=True)
+        else:
+            self.logger.error(f"{title}: {message}")
+        QMessageBox.critical(self.app, title, full_msg)
     
     ## Get NotepadPy++ version
     def get_program_version(self):
         """Returns the current version of the program. Introduced in version: v0.0.1"""
         return self.__version__
+
+    ## Get Current Editor
+    def get_current_editor(self):
+        """Returns the active QsciScintilla editor or None."""
+        editor = self.app.tabs.currentWidget()
+        if editor and editor.__class__.__name__ == "QsciScintilla":
+            return editor
+        return None
+
+    ## Undo
+    def undo(self):
+        """Undo last edit in active editor. Introduced in version: v0.0.1"""
+        editor = self.get_current_editor()
+        if editor:
+            editor.undo()
+
+    ## Redo
+    def redo(self):
+        """Redo last undone edit in active editor. Introduced in version: v0.0.1"""
+        editor = self.get_current_editor()
+        if editor:
+            editor.redo()
+
+    ## Cut
+    def cut(self):
+        """Cut selection to clipboard. Introduced in version: v0.0.1"""
+        editor = self.get_current_editor()
+        if editor:
+            editor.cut()
+
+    ## Copy
+    def copy(self):
+        """Copy selection to clipboard. Introduced in version: v0.0.1"""
+        editor = self.get_current_editor()
+        if editor:
+            editor.copy()
+
+    ## Paste
+    def paste(self):
+        """Paste clipboard contents. Introduced in version: v0.0.1"""
+        editor = self.get_current_editor()
+        if editor:
+            editor.paste()
+
+    ## Delete Selection
+    def delete_selection(self):
+        """Delete selected text. Introduced in version: v0.0.1"""
+        editor = self.get_current_editor()
+        if editor:
+            editor.removeSelectedText()
+
+    ## Select All
+    def select_all(self):
+        """Select all text in the editor. Introduced in version: v0.0.1"""
+        editor = self.get_current_editor()
+        if editor:
+            editor.selectAll()
+
+    ## Get Selected Text
+    def get_selected_text(self):
+        """Return the currently selected text in the active editor. Introduced in version: v0.0.1"""
+        editor = self.get_current_editor()
+        if editor:
+            return editor.selectedText()
+        return ""
+
+    ## Replace Selected Text
+    def replace_selected_text(self, new_text: str):
+        """Replace the currently selected text with new_text. Introduced in version: v0.0.1"""
+        editor = self.get_current_editor()
+        if not editor:
+            return
+        if not editor.hasSelectedText():
+            editor.insert(new_text)
+        else:
+            editor.replaceSelectedText(new_text)
+
+    ## New File
+    def new_file(self):
+        """Create a new unsaved file (delegates to main app). Introduced in version: v0.0.1"""
+        if hasattr(self.app, "new_file"):
+            self.app.new_file()
+
+    ## Open File
+    def open_file(self, file_path=None):
+        """Open a file; if no path given, open the file dialog. Introduced in version: v0.0.1"""
+        if file_path:
+            if hasattr(self.app, "open_file_by_path"):
+                self.app.open_file_by_path(file_path)
+        elif hasattr(self.app, "open_file_dialog"):
+            self.app.open_file_dialog()
+
+    ## Save Current File
+    def save_current_file(self):
+        """Save the currently active file. Introduced in version: v0.0.1"""
+        if hasattr(self.app, "save_current_file"):
+            self.app.save_current_file()
+    
+    ## Save Current File As
+    def save_current_file_as(self):
+        """Save the current file under a new name. Introduced in version: v0.0.1"""
+        if hasattr(self.app, "save_current_file_as"):
+            self.app.save_current_file_as()
+
+    ## Print File
+    def print_current_file(self):
+        """Print the current file using the app's print dialog. Introduced in version: v0.0.1"""
+        if hasattr(self.app, "print_file"):
+            self.app.print_file()
+
+    ## Close Application
+    def close_application(self):
+        """Close Notepad8 cleanly. Introduced in version: v0.0.1"""
+        if hasattr(self.app, "close_program"):
+            self.app.close_program()

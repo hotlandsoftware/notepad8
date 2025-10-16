@@ -88,6 +88,7 @@ class Config:
         self.data["open_files"] = [
             file_info for file_info in self.data["open_files"] if file_info["file_path"] != file_path 
         ]
+        self.save()
 
     def get_open_files(self):
         """Gets list of open files."""
