@@ -119,7 +119,7 @@ class NotepadPy(QMainWindow):
             ("Save", "Ctrl+S", self.save_current_file, "icons/save.png"),
             ("Save As...", "Ctrl+Shift+S", self.save_current_file_as, "icons/save_as.png"),
             ("Save Copy...", "Ctrl+Shift+F6", self.save_current_file_as_copy, "icons/save.png"),
-            ("Save All", "Ctrl+Shift+Alt+S", self.save_all_files, None),
+            ("Save All", "Ctrl+Shift+Alt+S", self.save_all_files, "icons/save_all.png"),
             (None, None, None, None), 
             ("Close", "Ctrl+W", self.close_current_tab, None),
             ("Close All", None, self.close_all_tabs, None),
@@ -137,14 +137,14 @@ class NotepadPy(QMainWindow):
         # Edit Menu
         edit_menu = menu_bar.addMenu("Edit")
         edit_actions = [
-            ("Undo", "Ctrl+Z", self.plugin_api.undo, None),
-            ("Redo", "Ctrl+R", self.plugin_api.redo, None),
+            ("Undo", "Ctrl+Z", self.plugin_api.undo, "icons/edit-undo.png"),
+            ("Redo", "Ctrl+R", self.plugin_api.redo, "icons/edit-redo.png"),
             (None, None, None, None), 
-            ("Cut", "Ctrl+X", self.plugin_api.cut, None),
-            ("Copy", "Ctrl+C", self.plugin_api.copy, None),
-            ("Paste", "Ctrl+V", self.plugin_api.paste, None),
-            ("Delete", "Del", self.plugin_api.delete_selection, None),
-            ("Select All", "Del", self.plugin_api.select_all, None),
+            ("Cut", "Ctrl+X", self.plugin_api.cut, "icons/edit-cut.png"),
+            ("Copy", "Ctrl+C", self.plugin_api.copy, "icons/edit-copy.png"),
+            ("Paste", "Ctrl+V", self.plugin_api.paste, "icons/edit-paste.png"),
+            ("Delete", "Del", self.plugin_api.delete_selection, "icons/edit-delete.png"),
+            ("Select All", "Ctrl+A", self.plugin_api.select_all, "icons/edit-select-all.png"),
         ]
         self.add_actions_to_menu(edit_menu, edit_actions)
 
@@ -152,9 +152,9 @@ class NotepadPy(QMainWindow):
         search_menu = menu_bar.addMenu("Search")
         search_actions = [
             ("Find", "Ctrl+F", self.find_dialog, "icons/search.png"),
-            ("Find Next", "F3", self.find_next, None),
-            ("Find Previous", "Shift+F3", self.find_previous, None),
-            ("Go to Line", "Ctrl+G", self.goto_line, None)
+            ("Find Next", "F3", self.find_next, "icons/search-next.png"),
+            ("Find Previous", "Shift+F3", self.find_previous,  "icons/search-previous.png"),
+            ("Go to Line", "Ctrl+G", self.goto_line, "icons/search-jump.png")
         ]
         self.add_actions_to_menu(search_menu, search_actions)
 
@@ -237,14 +237,27 @@ class NotepadPy(QMainWindow):
             ("Open", "icons/open.png", self.open_file_dialog, "Open"),
             ("Save", "icons/save.png", self.save_current_file, "Save"),
             ("Save As", "icons/save_as.png", self.save_current_file_as, "Save As"),
+            None,
+            ("Cut", "icons/edit-cut.png", self.plugin_api.cut, "Cut"),
+            ("Copy", "icons/edit-copy.png", self.plugin_api.copy, "Copy"),
+            ("Paste", "icons/edit-paste.png", self.plugin_api.paste, "Paste"),
+            None,
+            ("Undo", "icons/edit-undo.png", self.plugin_api.undo, "Undo"),
+            ("Redo", "icons/edit-redo.png", self.plugin_api.redo, "Redo"),  
+            None,
             ("Print", "icons/print.png", self.print_file, "Print"),
         ]
 
         self.add_actions_to_toolbar(toolbar, toolbar_actions)
 
     def add_actions_to_toolbar(self, toolbar, actions):
-        """Helper to add actions to a toolbar."""
-        for name, icon, handler, tooltip in actions:
+        """Adds actions to a toolbar."""
+        for action_data in actions:
+            if action_data is None:
+                toolbar.addSeparator()
+                continue
+            
+            name, icon, handler, tooltip = action_data
             action = QAction(QIcon(icon), name, self)
             action.triggered.connect(handler)
             action.setToolTip(tooltip)

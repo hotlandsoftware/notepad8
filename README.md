@@ -4,19 +4,18 @@ Notepad8 is a text editor designed to be a Notepad++ clone but built to run nati
 ## Why?
 Recently I switched to Arch Linux from Windows 11, and the experience has been fantastic. However, there was one program that I REALLY missed from Windows, and that was Notepad++. 
 
-Honestly, I have yet to find anything that can replicate not only its ease of use, but its expansive feature set. (I'm aware there is Notepadqq and NotepadNext, but I wasn't happy with its current feature set, and I'm not good enough at C++ to contribute to it... and I'm also aware you can run Notepad++ in Wine, but I wanted a native Linux version!)
+Honestly, I have yet to find anything that can replicate not only its ease of use, but its expansive feature set. (I'm aware there is Notepadqq and NotepadNext, but I wasn't happy with eithers current feature set, and I'm not good enough at C++ to contribute to it... and yes, I'm also aware you can run Notepad++ in Wine, but I wanted a native Linux version!)
 
 ## Why "Notepad8"?
 Notepad2 exists... 2 + 2 = 4... wait, Notepad4 exists! 4 + 4 = 8. So Notepad8! Or something like that
 
 ## What's it written in/made with?
-Python, QT6, and Scintilla.
+Python, QT6, Scintilla.
 
-## What's the goal/endgame?
-To eventually replicate Notepad++'s entire feature set. For the initial release, I targeted the very first version of Notepad++ (1.0.0) as a base. I will expand from there. So far, I've got syntax highlighting, UI customization, session restore, and some of the search features implemented. Very basic but its working.
+## What's the goal? How far are you?
+The goal is to eventually replicate all of Notepad++'s feature set, but tailored to Linux, plus a few other features I've long wanted.
 
-## Will it ever be finished?
-Progress is going well, so I think I have a good shot. I appreciate any help!
+In terms of how far we are in features, the application is about on par with Notepad++ 1.0 Beta (the original target). It also has a few features found in modern Notepad++ such as restoring unsaved files, custom language lexers, etc.
 
 ## Building
 Run ```./build.sh``` to build the project!
