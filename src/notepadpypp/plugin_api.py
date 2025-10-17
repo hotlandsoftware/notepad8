@@ -104,7 +104,7 @@ class PluginAPI:
             self.logger.info(f"{title}: {message}")
         QMessageBox.information(self.app, title, full_msg)
     
-    ## Get NotepadPy++ version
+    ## Get Notepad8 version
     def get_program_version(self):
         """Returns the current version of the program. Introduced in version: v0.0.1"""
         return self.__version__
@@ -212,11 +212,29 @@ class PluginAPI:
         if hasattr(self.app, "save_current_file_as"):
             self.app.save_current_file_as()
 
+    ## Save All Files
+    def save_all_files(self):
+        """Saves every opened file. Introduced in version: v0.0.1"""
+        if hasattr(self.app, "save_all_files"):
+            self.app.save_all_files()
+
     ## Print File
     def print_current_file(self):
         """Print the current file using the app's print dialog. Introduced in version: v0.0.1"""
         if hasattr(self.app, "print_file"):
             self.app.print_file()
+
+    ## Close Tab
+    def close_current_tab(self):
+        """Close current open tab. Introduced in version: v0.0.1"""
+        if hasattr(self.app, "close_current_tab"):
+            self.app.close_current_tab()
+
+    ## Close All Tabs
+    def close_all_tabs(self):
+        """Close all open tabs. Introduced in version: v0.0.1"""
+        if hasattr(self.app, "close_all_tabs"):
+            self.app.close_all_tabs()
 
     ## Close Application
     def close_application(self):

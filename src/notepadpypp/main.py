@@ -118,8 +118,14 @@ class NotepadPy(QMainWindow):
             ("Open", "Ctrl+O", self.open_file_dialog, "icons/open.png"),
             ("Save", "Ctrl+S", self.save_current_file, "icons/save.png"),
             ("Save As...", "Ctrl+Shift+S", self.save_current_file_as, "icons/save_as.png"),
-            ("Save Copy...", "Ctrl+Shift+F6", self.save_current_file_as_copy, "icons/save_as.png"),
+            ("Save Copy...", "Ctrl+Shift+F6", self.save_current_file_as_copy, "icons/save.png"),
+            ("Save All", "Ctrl+Shift+Alt+S", self.save_all_files, None),
+            (None, None, None, None), 
+            ("Close", "Ctrl+W", self.close_current_tab, None),
+            ("Close All", None, self.close_all_tabs, None),
+            (None, None, None, None), 
             ("Print", "Ctrl+P", self.print_file, "icons/print.png"),
+            (None, None, None, None), 
             ("_Launch", None, None, [
                 ("New Window...", "Ctrl+Shift+N", self.launch_new_window, None),
                 ("New Terminal...", "Ctrl+Shift+T", self.launch_new_terminal, None),
@@ -133,6 +139,7 @@ class NotepadPy(QMainWindow):
         edit_actions = [
             ("Undo", "Ctrl+Z", self.plugin_api.undo, None),
             ("Redo", "Ctrl+R", self.plugin_api.redo, None),
+            (None, None, None, None), 
             ("Cut", "Ctrl+X", self.plugin_api.cut, None),
             ("Copy", "Ctrl+C", self.plugin_api.copy, None),
             ("Paste", "Ctrl+V", self.plugin_api.paste, None),
@@ -677,6 +684,20 @@ class NotepadPy(QMainWindow):
         if isinstance(editor, QsciScintilla):
             self.save_file_as_copy(editor)
 
+    def save_all_files(self):
+        saved_count = 0
+    
+        for i in range(self.tabs.count()):
+            editor = self.tabs.widget(i)
+            if isinstance(editor, QsciScintilla) and editor.isModified():
+                self.save_file(editor)
+                saved_count += 1
+    
+        if saved_count > 0:
+            self.plugin_api.log(f"Saved {saved_count} file(s)")
+        else:
+            self.plugin_api.log("No modified files to save")
+
     # drag event
     def dragEnterEvent(self, event):
         """Handles the drag enter event."""
@@ -898,6 +919,20 @@ class NotepadPy(QMainWindow):
                 self.add_new_tab()
             else:
                 self.close()
+    
+    def close_current_tab(self):
+        """Close the currently active tab."""
+        current_index = self.tabs.currentIndex()
+        if current_index >= 0:
+            self.close_tab(current_index)
+            
+    def close_all_tabs(self):
+        """Close all open tabs."""
+        while self.tabs.count() > 1:
+            self.close_tab(self.tabs.count() - 1)
+        
+        if self.tabs.count() > 0:
+            self.close_tab(0)
 
     def cleanup_orphaned_backups(self):
         """Remove backup files that are no longer in the open_files config."""
