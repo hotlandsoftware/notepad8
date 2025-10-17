@@ -368,6 +368,14 @@ class NotepadPy(QMainWindow):
                 if caret_position:
                     editor.setCursorPosition(*caret_position)
 
+                if hasattr(editor, '_margin_timer'):
+                    editor._margin_timer.timeout.emit()
+
+                if lexer and lexer != "None":
+                    self.set_language(lexer)
+                else:
+                    self.set_language("None")
+
                 self.set_language(lexer)
                 restored_any = True
                 
@@ -436,8 +444,9 @@ class NotepadPy(QMainWindow):
             """Dynamically adjust the width of the margin based on the number of lines in the open document."""
             total_lines = max(1, editor.lines())
             digits = len(str(total_lines))
-            margin_width = editor.fontMetrics().horizontalAdvance("0") * digits + 6
-            editor.setMarginWidth(0, f"{margin_width}px")
+            sample_text = "0" * digits
+            margin_width = editor.fontMetrics().horizontalAdvance(sample_text) + 16
+            editor.setMarginWidth(0, margin_width)
 
         editor._margin_timer.timeout.connect(update_margin_width)
 
@@ -560,6 +569,9 @@ class NotepadPy(QMainWindow):
                     content = binary_content.hex()
         
             editor = self.add_new_tab(content, os.path.basename(file_path), file_name=file_path)
+
+            if hasattr(editor, '_margin_timer'):
+                editor._margin_timer.timeout.emit()
         
             lexer_class = get_lexer_for_file(file_path)
             lexer_name = "None"
@@ -775,14 +787,19 @@ class NotepadPy(QMainWindow):
         editor.setMarginsBackgroundColor(QColor(scintilla_config.get("margins_color", "#c0c0c0")))
         editor.setMarginsForegroundColor(default_font_color)
 
+        # Only do the expensive re-style if the document isn't already styled
+        # Check if document already has styling applied
         if not hasattr(editor, '_lexer_applied') or editor._lexer_applied != lexer_name:
+            # Force complete re-styling of the entire document
             editor.SendScintilla(QsciScintilla.SCI_SETLEXER, editor.SendScintilla(QsciScintilla.SCI_GETLEXER))
             editor.SendScintilla(QsciScintilla.SCI_COLOURISE, 0, -1)
         
+            # Additional force: trigger styleText manually for custom lexers
             if hasattr(lexer, 'styleText'):
                 text_length = editor.length()
                 lexer.styleText(0, text_length)
         
+            # Mark as styled
             editor._lexer_applied = lexer_name
 
         editor.update()
