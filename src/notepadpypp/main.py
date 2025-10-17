@@ -738,7 +738,7 @@ class NotepadPy(QMainWindow):
             desc = lexer.description(style)
             if desc and desc in lexer_styles:
                 style_def = lexer_styles[desc]
-
+            
                 if isinstance(style_def, str):
                     color = QColor(style_def)
                     background = default_background
@@ -775,15 +775,17 @@ class NotepadPy(QMainWindow):
         editor.setMarginsBackgroundColor(QColor(scintilla_config.get("margins_color", "#c0c0c0")))
         editor.setMarginsForegroundColor(default_font_color)
 
-        editor.SendScintilla(QsciScintilla.SCI_SETLEXER, editor.SendScintilla(QsciScintilla.SCI_GETLEXER))
-        editor.SendScintilla(QsciScintilla.SCI_COLOURISE, 0, -1)
-    
-        if hasattr(lexer, 'styleText'):
-            text_length = editor.length()
-            lexer.styleText(0, text_length)
-    
+        if not hasattr(editor, '_lexer_applied') or editor._lexer_applied != lexer_name:
+            editor.SendScintilla(QsciScintilla.SCI_SETLEXER, editor.SendScintilla(QsciScintilla.SCI_GETLEXER))
+            editor.SendScintilla(QsciScintilla.SCI_COLOURISE, 0, -1)
+        
+            if hasattr(lexer, 'styleText'):
+                text_length = editor.length()
+                lexer.styleText(0, text_length)
+        
+            editor._lexer_applied = lexer_name
+
         editor.update()
-        editor.viewport().update()
 
         return font
 
@@ -972,9 +974,27 @@ class NotepadPy(QMainWindow):
 
         settings = self.tab_settings.get(editor, {})
         language = settings.get("language", "None")
-
-        if language and language != self.current_language:
+        
+        current_lexer = editor.lexer()
+        needs_lexer_update = False
+    
+        if language == "None":
+            if current_lexer is not None:
+                needs_lexer_update = True
+        else:
+            if current_lexer is None:
+                needs_lexer_update = True
+            else:
+                current_lang = current_lexer.language()
+                if current_lang != language:
+                    needs_lexer_update = True
+    
+        if needs_lexer_update:
             self.set_language(language)
+        else:
+            for lang, action in self.language_actions.items():
+                action.setChecked(lang == language)
+            self.current_language = language
 
     def update_tab_modified_state(self, editor):
         """Changes the tab icon, as well as adds a *, if the file is modified."""
