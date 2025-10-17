@@ -1,0 +1,97 @@
+{
+    "name": "JSON",
+    "extensions": [".json"],
+    "case_sensitive": true,
+    "detect_numbers": true,
+    "line_comment": "//",
+    "block_comment_start": "/*",
+    "block_comment_end": "*/",
+    "string_delimiters": ["\""],
+    "string2_delimiters": [],
+    "property_pattern": true,
+    "operators": [",", ":", "{", "}", "[", "]"],
+    "keywords1": ["true", "false"],
+    "keywords2": ["null"],
+    "keywords3": [],
+    "keywords4": [],
+    "styles": {
+        "Default": {
+            "color": "#FFFFFF",
+            "background": "#BB0000",
+            "bold": false,
+            "italic": false
+        },
+        "Property": {
+            "color": "#904b2f",
+            "background": "#FFFFFF",
+            "bold": false,
+            "italic": false
+        },
+        "String": {
+            "color": "#904b2f",
+            "background": "#FFFFFF",
+            "bold": false,
+            "italic": false
+        },
+        "String2": {
+            "color": "#CE9178",
+            "background": "#FFFFFF",
+            "bold": false,
+            "italic": false
+        },
+        "Number": {
+            "color": "#B5CEA8",
+            "background": "#FFFFFF",
+            "bold": false,
+            "italic": false
+        },
+        "Keyword1": {
+            "color": "#569CD6",
+            "background": "#FFFFFF",
+            "bold": true,
+            "italic": false
+        },
+        "Keyword2": {
+            "color": "#569CD6",
+            "background": "#FFFFFF",
+            "bold": true,
+            "italic": false
+        },
+        "Keyword3": {
+            "color": "#C586C0",
+            "background": "#FFFFFF",
+            "bold": false,
+            "italic": false
+        },
+        "Keyword4": {
+            "color": "#4EC9B0",
+            "background": "#FFFFFF",
+            "bold": false,
+            "italic": false
+        },
+        "Operator": {
+            "color": "#D4D4D4",
+            "background": "#FFFFFF",
+            "bold": false,
+            "italic": false
+        },
+        "LineComment": {
+            "color": "#6A9955",
+            "background": "#FFFFFF",
+            "bold": false,
+            "italic": true
+        },
+        "BlockComment": {
+            "color": "#6A9955",
+            "background": "#FFFFFF",
+            "bold": false,
+            "italic": true
+        },
+        "Error": {
+            "color": "#FF0000",
+            "background": "#FFEEEE",
+            "bold": false,
+            "italic": false
+        }
+    }
+}

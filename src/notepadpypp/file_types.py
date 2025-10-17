@@ -9,15 +9,53 @@ from PyQt6.Qsci import (
     QsciLexerXML, QsciLexerYAML
 )
 
-from custom_lexers import ( 
-    BrainfuckLexer
-)
+from generic_lexer import GenericLexer
+import json
+import os
 
-LEXER_TYPES = {
+
+def load_generic_lexers():
+    """Load all *_lang.json files from the lexer directory."""
+    lexer_dir = os.path.join(os.path.dirname(__file__), "lexer")
+    generic_lexers = {}
+    
+    if not os.path.exists(lexer_dir):
+        return generic_lexers
+    
+    for filename in os.listdir(lexer_dir):
+        if filename.endswith("_lang.json"):
+            filepath = os.path.join(lexer_dir, filename)
+            try:
+                with open(filepath, "r") as f:
+                    config = json.load(f)
+                    lang_name = config.get("name", filename.replace("_lang.json", ""))
+                    
+                    def make_lexer_class(cfg, name):
+                        class CustomGenericLexer(GenericLexer):
+                            def __init__(self, parent=None):
+                                super().__init__(parent, lang_name=name, config=cfg)
+                        CustomGenericLexer.__name__ = f"{name}Lexer"
+                        return CustomGenericLexer
+                    
+                    lexer_class = make_lexer_class(config, lang_name)
+                    generic_lexers[lang_name] = {
+                        "class": lexer_class,
+                        "extensions": config.get("extensions", []),
+                        "config": config
+                    }
+            except Exception as e:
+                print(f"Failed to load generic lexer {filename}: {e}")
+    
+    return generic_lexers
+
+GENERIC_LEXERS = load_generic_lexers()
+
+DEFAULT_LEXER_TYPES = {
     ".asm": QsciLexerAsm,
     ".bat": QsciLexerBatch,
-    ".b": BrainfuckLexer,
-    ".bf": BrainfuckLexer,
+    # TODO: convert this
+    #".b": BrainfuckLexer,
+    #".bf": BrainfuckLexer,
     ".cmake": QsciLexerCMake,
     ".cmd": QsciLexerBatch,
     ".C": QsciLexerCPP,
@@ -70,11 +108,15 @@ LEXER_TYPES = {
     ".yaml": QsciLexerYAML
 }
 
-LANGUAGES = {
+for lang_name, lexer_info in GENERIC_LEXERS.items():
+    for ext in lexer_info["extensions"]:
+        DEFAULT_LEXER_TYPES[ext] = lexer_info["class"]
+
+DEFAULT_LANGUAGES = {
     "Assembly (x86)": QsciLexerAsm,
     "Bash": QsciLexerBash,
     "Batch": QsciLexerBatch,
-    "Brainfuck": BrainfuckLexer,
+    #"Brainfuck": BrainfuckLexer,
     "CMake": QsciLexerCMake,
     "C#": QsciLexerCSharp,
     "C++": QsciLexerCPP,
@@ -102,8 +144,11 @@ LANGUAGES = {
     "YAML": QsciLexerYAML
 }
 
+for lang_name, lexer_info in GENERIC_LEXERS.items():
+    DEFAULT_LANGUAGES[lang_name] = lexer_info["class"]
+
 def get_lexer_for_file(file_name):
-    for ext, lexer_class in LEXER_TYPES.items():
+    for ext, lexer_class in DEFAULT_LEXER_TYPES.items():
         if file_name.endswith(ext):
             return lexer_class
     return None

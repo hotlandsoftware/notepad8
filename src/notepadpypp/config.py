@@ -19,6 +19,7 @@ CONFIG_PATH = get_config_path()
 DEFAULT_CONFIG = {
     "debugMode": False, # Enable console debug mode
     "wordWrap": False, # Use word wrapping
+    "autoIndent": True, # Use auto indenting
     "wrapAroundSearch": False, # Search from top if not found on bottom in search (or vice versa)
     "useRegex": False, # Use regular expressions in search
     "restoreFilesOnClose": True, # Restore files upon closing

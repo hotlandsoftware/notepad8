@@ -1,6 +1,8 @@
 import sys
 import os
 import subprocess
+import platform
+import shutil
 import json
 import re
 import hashlib 
@@ -48,7 +50,7 @@ except ImportError:
 
 from config import Config, CONFIG_PATH
 from plugin_api import PluginAPI
-from file_types import get_lexer_for_file, LANGUAGES
+from file_types import get_lexer_for_file, DEFAULT_LANGUAGES
 from plugin_manager import PluginManager
 from dialogs import SearchDialog
 
@@ -70,6 +72,7 @@ class NotepadPy(QMainWindow):
         self.tab_settings = {}
         self.new_file_counter = 1
         self.last_search_options = None
+        self.current_language = "None"
 
         self.plugin_manager = PluginManager(self)
         self.plugin_api = PluginAPI(self, self.plugin_manager)
@@ -79,12 +82,13 @@ class NotepadPy(QMainWindow):
         self.plugin_manager.load_plugins()
 
         self.restore_session()
+        self.cleanup_orphaned_backups()
         self.setup_backup_timer()
 
     def init_ui(self):
         """Initialize the main user interface."""
         self.setWindowTitle("Notepad8")
-        self.resize(800, 600)
+        self.resize(640, 480)
         self.tabs = QTabWidget(self)
         self.tabs.setTabsClosable(True)
         self.tabs.setMovable(not self.config.get("lockTabs", False))
@@ -116,7 +120,10 @@ class NotepadPy(QMainWindow):
             ("Save As...", "Ctrl+Shift+S", self.save_current_file_as, "icons/save_as.png"),
             ("Save Copy...", "Ctrl+Shift+F6", self.save_current_file_as_copy, "icons/save_as.png"),
             ("Print", "Ctrl+P", self.print_file, "icons/print.png"),
-            ("_Launch", None, None, [("New Window...", "Ctrl+Shift+N", self.launch_new_window, None)]),
+            ("_Launch", None, None, [
+                ("New Window...", "Ctrl+Shift+N", self.launch_new_window, None),
+                ("New Terminal...", "Ctrl+Shift+T", self.launch_new_terminal, None),
+            ]),
             ("Exit", "Alt+F4", self.close_program, None)
         ]
         self.add_actions_to_menu(file_menu, file_actions)
@@ -195,7 +202,7 @@ class NotepadPy(QMainWindow):
         self.language_actions["None"] = none_action
         
         grouped_languages = {}
-        for language in sorted(LANGUAGES.keys()):
+        for language in sorted(DEFAULT_LANGUAGES.keys()):
             group = language[0].upper()
             grouped_languages.setdefault(group, []).append(language)
 
@@ -206,6 +213,10 @@ class NotepadPy(QMainWindow):
                 action.setCheckable(True)
                 action.triggered.connect(lambda _, lang=language: self.set_language(lang))
                 self.language_actions[language] = action
+
+        language_menu.addSeparator()
+        import_action = language_menu.addAction("Import Notepad++ Language Style...")
+        import_action.triggered.connect(self.import_npp_language)
                 
     def create_toolbar(self):
         """Creates the toolbar below the menu."""
@@ -380,6 +391,9 @@ class NotepadPy(QMainWindow):
         index = self.tabs.addTab(editor, title)
         self.tabs.setCurrentIndex(index)
 
+        text_icon = QIcon("icons/text.png")
+        self.tabs.setTabIcon(index, text_icon)
+
         if file_name:
             self.set_tab_file_path(editor, file_name)
 
@@ -414,6 +428,10 @@ class NotepadPy(QMainWindow):
         editor.dragEnterEvent = dragEnterEvent
         editor.dropEvent = dropEvent
 
+        editor._margin_timer = QTimer()
+        editor._margin_timer.setSingleShot(True)
+        editor._margin_timer.setInterval(50)
+
         def update_margin_width():
             """Dynamically adjust the width of the margin based on the number of lines in the open document."""
             total_lines = max(1, editor.lines())
@@ -421,10 +439,14 @@ class NotepadPy(QMainWindow):
             margin_width = editor.fontMetrics().horizontalAdvance("0") * digits + 6
             editor.setMarginWidth(0, f"{margin_width}px")
 
+        editor._margin_timer.timeout.connect(update_margin_width)
+
+        def schedule_margin_update():
+            editor._margin_timer.start()
+
         update_margin_width()
 
-        editor.linesChanged.connect(update_margin_width)
-        editor.textChanged.connect(update_margin_width)
+        editor.linesChanged.connect(schedule_margin_update)
 
         font = QFont(scintilla_config.get("font", "Courier New"), scintilla_config.get("font_size", 12))
         font.setFixedPitch(True)
@@ -443,12 +465,12 @@ class NotepadPy(QMainWindow):
         editor.setMarginsBackgroundColor(QColor(scintilla_config.get("margins_color", "#c0c0c0")))
         editor.setMarginsForegroundColor(font_color)
 
-        # TODO: make these toggable settings
         editor.setFolding(QsciScintilla.FoldStyle.BoxedFoldStyle)
         editor.setAutoCompletionSource(QsciScintilla.AutoCompletionSource.AcsAll)
         editor.setAutoCompletionThreshold(2)
 
         editor.setIndentationsUseTabs(False)
+        editor.setAutoIndent(self.config.get("autoIndent", True))
         editor.setTabWidth(4) 
 
         editor.modificationChanged.connect(lambda: self.update_tab_modified_state(editor))
@@ -459,6 +481,7 @@ class NotepadPy(QMainWindow):
             editor.setWrapMode(QsciScintilla.WrapMode.WrapNone)
 
         editor.textChanged.connect(self.text_changed)
+        
         return editor
 
     def update_title(self):
@@ -521,12 +544,12 @@ class NotepadPy(QMainWindow):
                     "Error", f"The file {os.path.basename(file_path)} is already open"
                 )
                 return 
+    
         try:
             with open(file_path, "rb") as file:
                 binary_content = file.read()
-
                 detected = from_bytes(binary_content).best()
-
+            
                 if detected:
                     encoding = detected.encoding
                     try: 
@@ -535,23 +558,26 @@ class NotepadPy(QMainWindow):
                         content = binary_content.hex()
                 else:    
                     content = binary_content.hex()
-                    
-                editor = self.add_new_tab(content, os.path.basename(file_path), file_name=file_path)
-                editor.setText(content)
-
-                lexer_class = get_lexer_for_file(file_path)
-                if lexer_class:
-                    for language, cls in LANGUAGES.items():
-                        if cls == lexer_class:
-                            self.set_language(language)
-                            break
-                else:
-                    self.set_language("None")
-
-                self.config.add_open_file(file_path, is_modified=False, lexer=self.get_lexer_for_editor(editor))
-                self.plugin_api.log(f"Added to config: {file_path}, Modified: {editor.isModified()}, Lexer: {self.get_lexer_for_editor(editor)}")
-                self.config.save()
-                editor.setModified(False)
+        
+            editor = self.add_new_tab(content, os.path.basename(file_path), file_name=file_path)
+        
+            lexer_class = get_lexer_for_file(file_path)
+            lexer_name = "None"
+        
+            if lexer_class:
+                for language, cls in DEFAULT_LANGUAGES.items():
+                    if cls == lexer_class:
+                        lexer_name = language
+                        break
+        
+            self.set_language(lexer_name)
+        
+            self.config.add_open_file(file_path, is_modified=False, lexer=lexer_name)
+            self.config.save()
+        
+            editor.setModified(False)
+        
+            self.plugin_api.log(f"Opened: {file_path} with lexer: {lexer_name}")
 
         except Exception as e:
             self.plugin_api.show_error("Error", f"Failed to open file '{file_path}':\n{str(e)}")
@@ -571,7 +597,9 @@ class NotepadPy(QMainWindow):
     def save_file(self, editor):
         """Saves the current file."""
         file_path = self.get_tab_file_path(editor)
-        if not file_path:
+
+        # TODO: this is ok for "new" files, but backed up files should save over the original
+        if not file_path or file_path.startswith(self.backup_path):
             self.save_file_as(editor)
             return
 
@@ -652,21 +680,33 @@ class NotepadPy(QMainWindow):
                 self.open_dropped_file(file_path)
 
     def load_lexer_colors(self, lexer_name):
-        """Load lexer colors from a JSON (and soon also XML) file."""
+        """Load lexer colors from a JSON file or _lang.json config."""
+        from file_types import GENERIC_LEXERS
+        for lang_name, lexer_info in GENERIC_LEXERS.items():
+            if lexer_name == f"{lang_name}Lexer" or lexer_name == lang_name:
+                if "styles" in lexer_info["config"]:
+                    return lexer_info["config"]["styles"]
+                elif "colors" in lexer_info["config"]:
+                    colors = lexer_info["config"]["colors"]
+                    return {k: {"color": v} for k, v in colors.items()}
+    
         lexer_name = lexer_name.replace("Lexer", "")
         if lexer_name.startswith("custom_lexers"):
             lexer_name = lexer_name.split(".")[-1]
-        
+
         lexer_dir = os.path.join(os.path.dirname(__file__), "lexer")
         lexer_file = os.path.join(lexer_dir, f"{lexer_name}.json")
 
         if not os.path.exists(lexer_file):
-            self.plugin_api.log(f"json for lexer {lexer_name} not found!")
             return {}
-        
+
         try:
             with open(lexer_file, "r") as file:
-                return json.load(file)
+                data = json.load(file)
+                if isinstance(data, dict) and any(isinstance(v, dict) for v in data.values()):
+                    return data
+                else:
+                    return {k: {"color": v} for k, v in data.items()}
         except json.JSONDecodeError as e:
             self.plugin_api.log(f"error parsing JSON file for {lexer_file}! {e}")
             return {}
@@ -678,69 +718,110 @@ class NotepadPy(QMainWindow):
             return lexer.language()
         return "None"
 
+    def apply_lexer_styling(self, editor, lexer):
+        """Apply complete styling configuration to a lexer and editor."""
+        scintilla_config = self.config.get("scintillaConfig", {})
+        default_background = QColor(scintilla_config.get("color", "#FFFFFF"))
+        default_font_color = QColor(scintilla_config.get("font_color", "#000000"))
+        font = QFont(scintilla_config.get("font", "Courier New"), scintilla_config.get("font_size", 12))
+        font.setFixedPitch(True)
+    
+        lexer.setFont(font)
+    
+        lexer_name = lexer.__class__.__name__
+        if lexer_name.startswith("QsciLexer"):
+            lexer_name = lexer_name.replace("QsciLexer", "")
+    
+        lexer_styles = self.load_lexer_colors(lexer_name)
+    
+        for style in range(128):
+            desc = lexer.description(style)
+            if desc and desc in lexer_styles:
+                style_def = lexer_styles[desc]
+
+                if isinstance(style_def, str):
+                    color = QColor(style_def)
+                    background = default_background
+                    style_font = QFont(font)
+                else:
+                    color = QColor(style_def.get("color", default_font_color.name()))
+                    background = QColor(style_def.get("background", default_background.name()))
+                
+                    style_font = QFont(font)
+                    if style_def.get("bold", False):
+                        style_font.setBold(True)
+                    if style_def.get("italic", False):
+                        style_font.setItalic(True)
+            
+                lexer.setColor(color, style)
+                lexer.setPaper(background, style)
+                lexer.setFont(style_font, style)
+            else:
+                lexer.setPaper(default_background, style)
+                lexer.setFont(font, style)
+    
+        default_style = 0
+        if hasattr(lexer, 'Default'):
+            default_style = lexer.Default
+        elif hasattr(lexer, 'DEFAULT'):
+            default_style = lexer.DEFAULT
+    
+        lexer.setPaper(default_background, default_style)
+        lexer.setColor(default_font_color, default_style)
+        lexer.setFont(font, default_style)
+    
+        editor.setLexer(lexer)
+    
+        editor.setMarginsBackgroundColor(QColor(scintilla_config.get("margins_color", "#c0c0c0")))
+        editor.setMarginsForegroundColor(default_font_color)
+
+        editor.SendScintilla(QsciScintilla.SCI_SETLEXER, editor.SendScintilla(QsciScintilla.SCI_GETLEXER))
+        editor.SendScintilla(QsciScintilla.SCI_COLOURISE, 0, -1)
+    
+        if hasattr(lexer, 'styleText'):
+            text_length = editor.length()
+            lexer.styleText(0, text_length)
+    
+        editor.update()
+        editor.viewport().update()
+
+        return font
+
     def set_language(self, language):
+        """Set the syntax highlighting language for the current editor."""
         for lang, action in self.language_actions.items():
             action.setChecked(lang == language)
     
         self.current_language = language
-        
+    
         editor = self.tabs.currentWidget()
         if not isinstance(editor, QsciScintilla):
             return
-        
+    
         if language == "None":
             editor.setLexer(None)
-            editor.setText(editor.text())
+            self.tab_settings[editor] = {'language': 'None', 'font': editor.font()}
             return
     
-        lexer_class = LANGUAGES.get(language)
-        if lexer_class and self.tabs.currentWidget():
-            editor = self.tabs.currentWidget()
+        lexer_class = DEFAULT_LANGUAGES.get(language)
+        if not lexer_class:
+            self.plugin_api.log(f"No lexer class found for language: {language}")
+            return
+    
+        lexer = lexer_class(editor)
+        font = self.apply_lexer_styling(editor, lexer)
+    
+        self.tab_settings[editor] = {
+            'language': language,
+            'font': font
+        }
+    
+        self.plugin_api.log(f"Set language to {language}")
 
-            lexer = lexer_class(editor)
-
-            scintilla_config = self.config.get("scintillaConfig", {})
-            background_color = QColor(scintilla_config.get("color", "#FFFFFF"))
-            font_color = QColor(scintilla_config.get("font_color", "#000000"))
-            font = QFont(scintilla_config.get("font", "Courier New"), scintilla_config.get("font_size", 12))
-            font.setFixedPitch(True)
-            lexer.setFont(font)
-            
-            lexer_name = lexer.__class__.__name__.replace("QsciLexer", "")
-            lexer_colors = self.load_lexer_colors(lexer_name)
-
-            for style in range(128): 
-                desc = lexer.description(style)
-                if lexer.description(style):
-                    color = lexer_colors.get(lexer.description(style), font_color.name())
-                    lexer.setColor(QColor(color), style)
-                    lexer.setPaper(background_color, style)
-                else: 
-                    lexer.setPaper(background_color, style)
-
-            lexer.setPaper(background_color, lexer.Default)
-            lexer.setColor(font_color, lexer.Default)
-
-            editor.setMarginsBackgroundColor(QColor(scintilla_config.get("margins_color", "#c0c0c0")))
-            editor.setMarginsForegroundColor(QColor(font_color))
-
-            editor.setLexer(lexer)
-            editor.SendScintilla(QsciScintilla.SCI_COLOURISE, 0, editor.length())
-            editor.SendScintilla(editor.SCI_SETCARETLINEVISIBLE, True)
-            editor.SendScintilla(editor.SCI_SETSEL, 0, 0)
-            editor.repaint()
-
-            self.tab_settings[editor] = {
-                'language': language,
-                'font': font
-            }
-
-            self.plugin_api.log(f"setting language to {language} lexer: {lexer_class}")
-            
     def close_tab(self, index):
         editor = self.tabs.widget(index)
         file_path = self.get_tab_file_path(editor)
-    
+
         if editor.isModified():
             reply = QMessageBox.question(
                 self, 
@@ -748,46 +829,81 @@ class NotepadPy(QMainWindow):
                 "Do you want to save the file?",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel
             )
-    
+
             if reply == QMessageBox.StandardButton.Yes:
                 self.save_file(editor)
-                self.tabs.removeTab(index)
             elif reply == QMessageBox.StandardButton.No:
-                if file_path and file_path.startswith(self.backup_path):
-                    try:
-                        os.remove(file_path)
-                        self.plugin_api.log(f"Deleted unsaved backup file: {file_path}")
-                    except Exception as e:
-                        self.plugin_api.show_error("Cleanup Error", f"Failed to delete {file_path}", e)
-                self.tabs.removeTab(index)
+                pass
             else:
-                return # cancelled
-        else:
-            self.tabs.removeTab(index)
-    
+                return
+
+        self.tabs.removeTab(index)
+
         if editor in self.modified_tabs:
             del self.modified_tabs[editor]
         if editor in self.file_paths:
             del self.file_paths[editor]
-            
+        if editor in self.tab_settings:
+            del self.tab_settings[editor]
+    
         if file_path:
             self.config.remove_open_file(file_path)
             self.config.save()
 
-            if file_path.startswith(self.backup_path) and os.path.exists(file_path):
+            is_backup = file_path.startswith(self.backup_path) and file_path.endswith('.bak')
+        
+            if is_backup and os.path.exists(file_path):
                 try:
                     os.remove(file_path)
-                    self.plugin_api.log(f"Deleted backup after closing tab: {file_path}")
+                    self.plugin_api.log(f"Deleted backup file: {file_path}")
                 except Exception as e:
-                    self.plugin_api.show_error("Cleanup Error", f"Failed to delete backup file {file_path}", e)
-            
-        self.update_title()
+                    self.plugin_api.log(f"Failed to delete backup {file_path}: {e}")
         
+            if not is_backup:
+                backup_name = f"{os.path.basename(file_path)}.bak"
+                backup_file = os.path.join(self.backup_path, backup_name)
+                if os.path.exists(backup_file):
+                    try:
+                        os.remove(backup_file)
+                        self.plugin_api.log(f"Deleted associated backup: {backup_file}")
+                    except Exception as e:
+                        self.plugin_api.log(f"Failed to delete backup {backup_file}: {e}")
+        
+            if file_path in self.backup_files:
+                del self.backup_files[file_path]
+    
+        self.update_title()
+    
         if self.tabs.count() == 0:
             if self.config.get("openNewTabOnLastClosed", True):
                 self.add_new_tab()
             else:
                 self.close()
+
+    def cleanup_orphaned_backups(self):
+        """Remove backup files that are no longer in the open_files config."""
+        if not os.path.exists(self.backup_path):
+            return
+    
+        open_file_paths = {f["file_path"] for f in self.config.get("open_files", [])}
+
+        for backup_file in os.listdir(self.backup_path):
+            backup_path = os.path.join(self.backup_path, backup_file)
+        
+            if backup_path not in open_file_paths:
+                original_name = backup_file.replace('.bak', '')
+                is_referenced = any(
+                    os.path.basename(f) == original_name or 
+                    f"{os.path.basename(f)}.bak" == backup_file 
+                    for f in open_file_paths
+                )
+            
+                if not is_referenced:
+                    try:
+                        os.remove(backup_path)
+                        self.plugin_api.log(f"Cleaned up orphaned backup: {backup_path}")
+                    except Exception as e:
+                        self.plugin_api.log(f"Failed to cleanup {backup_path}: {e}")
             
     def update_tab_title(self, editor, file_path):
         index = self.tabs.indexOf(editor)
@@ -847,20 +963,19 @@ class NotepadPy(QMainWindow):
             current_editor.setCursorPosition(line_number - 1, 0)
 
     def update_title_on_tab_change(self, index):
+        """Update window title and restore tab settings when switching tabs."""
         self.update_title()
-        
-        editor = self.tabs.widget(index)
-        
-        if isinstance(editor, QsciScintilla):
-            settings = self.tab_settings.get(editor, {})
-            language = settings.get('language', 'None')
-            font = settings.get('font')
 
-            if language:
-                self.set_language(language)
-            if font:
-                editor.setFont(font)
-    
+        editor = self.tabs.widget(index)
+        if not isinstance(editor, QsciScintilla):
+            return
+
+        settings = self.tab_settings.get(editor, {})
+        language = settings.get("language", "None")
+
+        if language and language != self.current_language:
+            self.set_language(language)
+
     def update_tab_modified_state(self, editor):
         """Changes the tab icon, as well as adds a *, if the file is modified."""
         index = self.tabs.indexOf(editor)
@@ -1043,7 +1158,71 @@ class NotepadPy(QMainWindow):
         app._np_windows.append(win)
 
         win.show()
+    
+    def launch_new_terminal(self):
+        system = platform.system()
+
+        try:
+            if system == "Windows":
+                subprocess.Popen(["start", "cmd"], shell=True)
         
+            elif system == "Darwin": # mac
+                subprocess.Popen(["open", "-a", "Terminal"])
+            
+            # there is absolutely a better way to do this
+            else: # unix
+                for term in ["x-terminal-emulator", "gnome-terminal", "konsole", "xfce4-terminal", "xterm", "alacritty", "kitty"]:
+                    if shutil.which(term):
+                        subprocess.Popen([term])
+                        break
+                else:
+                    self.plugin_api.show_error("Error", "No terminal emulator found in PATH.")
+
+        except Exception as e:
+            self.plugin_api.show_error("Error", f"Failed to launch terminal:\n{str(e)}")
+        
+    def import_npp_language(self):
+        """Import a Notepad++ User Defined Language XML file."""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, 
+            "Import Notepad++ Language", 
+            "", 
+            "XML Files (*.xml);;All Files (*)"
+        )
+
+        if not file_path:
+            return
+
+        try:
+            from npp_converter import NotepadPlusPlusConverter
+
+            converter = NotepadPlusPlusConverter()
+            config = converter.convert_xml_to_json(file_path)
+        
+            lexer_dir = os.path.join(os.path.dirname(__file__), "lexer")
+            os.makedirs(lexer_dir, exist_ok=True)
+
+            lang_name = config['name']
+            output_path = os.path.join(lexer_dir, f"{lang_name}_lang.json")
+
+            with open(output_path, 'w', encoding='utf-8') as f:
+                json.dump(config, f, indent=4)
+
+            self.plugin_api.sohw_info(
+                "Import Successful",
+                f"Successfully imported language: {lang_name}\n\n"
+                f"Saved to: {output_path}\n\n"
+                f"Extensions: {', '.join(config['extensions'])}\n\n"
+                "Please restart the application to use the new language."
+            )
+        
+            self.plugin_api.log(f"Imported Notepad++ User Language: {lang_name}")
+
+        except Exception as e:
+            self.plugin_api.show_error(
+                "Import Failed",
+                f"Failed to import Notepad++ language file:\n{str(e)}"
+            )
 
 # only allow a single instance to run
 def check_duplicate_instance(app_id="NotepadPy"):

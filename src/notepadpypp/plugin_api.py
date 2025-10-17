@@ -92,6 +92,17 @@ class PluginAPI:
         else:
             self.logger.error(f"{title}: {message}")
         QMessageBox.critical(self.app, title, full_msg)
+
+    ## Show Info
+    def show_info(self, title, message, exc=None):
+        """Shows information box. Introduced in version: v0.0.1"""
+        full_msg = message
+        if exc:
+            full_msg += f"\n\n{type(exc).__name__}: {exc}"
+            self.logger.info(f"{title}: {exc}", exc_info=True)
+        else:
+            self.logger.info(f"{title}: {message}")
+        QMessageBox.information(self.app, title, full_msg)
     
     ## Get NotepadPy++ version
     def get_program_version(self):
