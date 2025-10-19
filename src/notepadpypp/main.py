@@ -73,6 +73,7 @@ class NotepadPy(QMainWindow):
         self.new_file_counter = 1
         self.last_search_options = None
         self.current_language = "None"
+        self.last_replace_text = ""
 
         self.plugin_manager = PluginManager(self)
         self.plugin_api = PluginAPI(self, self.plugin_manager)
@@ -151,9 +152,10 @@ class NotepadPy(QMainWindow):
         # Search Menu
         search_menu = menu_bar.addMenu("Search")
         search_actions = [
-            ("Find", "Ctrl+F", self.find_dialog, "icons/search.png"),
+            ("Find...", "Ctrl+F", self.find_dialog, "icons/search.png"),
             ("Find Next", "F3", self.find_next, "icons/search-next.png"),
             ("Find Previous", "Shift+F3", self.find_previous,  "icons/search-previous.png"),
+            ("Replace...", "Ctrl+H", self.replace_dialog, None),
             ("Go to Line", "Ctrl+G", self.goto_line, "icons/search-jump.png")
         ]
         self.add_actions_to_menu(search_menu, search_actions)
@@ -1145,6 +1147,90 @@ class NotepadPy(QMainWindow):
             self.last_search_options = options
             self.find_text_in_editor(editor, options)
 
+    # Replace Dialog
+    def replace_dialog(self):
+        """Opens the replace dialog."""
+        from dialogs import ReplaceDialog
+
+        editor = self.tabs.currentWidget()
+        if not isinstance(editor, QsciScintilla):
+            return
+
+        last_search = self.get_last_search()
+
+        dialog = ReplaceDialog(
+            self,
+            wrap_around=self.config.get("wrapAroundSearch", False),
+            use_regex=self.config.get("useRegex", False),
+            last_search_text=last_search["text"],
+            last_replace_text=self.last_replace_text
+        )
+        dialog.show()
+
+    # Replace Selection
+    def replace_selection(self, editor, replace_text):
+        if editor.hasSelectedText():
+            editor.replaceSelectedText(replace_text)
+            self.plugin_api.log(f"Replaced selection with: {replace_text}")
+
+    # Replace All
+    def replace_all(self, editor, options, replace_text):
+        """Replace all occurrences of the search text."""
+        search_text = options["text"]
+        match_case = options["match_case"]
+        match_whole_word = options.get("match_whole_word", False)
+        use_regex = options["use_regex"]
+        wrap_around = options["wrap_around"]
+    
+        if not search_text:
+            return 0
+    
+        full_text = editor.text()
+        current_position = editor.SendScintilla(QsciScintilla.SCI_GETCURRENTPOS)
+        count = 0
+    
+        flags = 0 if match_case else re.IGNORECASE
+    
+        try:
+            if use_regex:
+                pattern = re.compile(search_text, flags)
+            else:
+                escaped_text = re.escape(search_text)
+                if match_whole_word:
+                    escaped_text = r'\b' + escaped_text + r'\b'
+                pattern = re.compile(escaped_text, flags)
+
+            if wrap_around:
+                matches = list(pattern.finditer(full_text))
+            else:
+                matches = [m for m in pattern.finditer(full_text) if m.start() >= current_position]
+
+            if not matches:
+                return 0
+        
+            editor.beginUndoAction()
+        
+            try:
+                for match in reversed(matches):
+                    start, end = match.span()
+
+                    editor.SendScintilla(QsciScintilla.SCI_SETSEL, start, end)
+                
+                    editor.replaceSelectedText(replace_text)
+                
+                    count += 1
+            finally:
+                editor.endUndoAction()
+        
+            self.plugin_api.log(f"Replaced {count} occurrence(s)")
+            self.last_replace_text = replace_text
+
+            return count
+        
+        except re.error as e:
+            self.plugin_api.show_error("Regex Error", f"Invalid regular expression: {e}")
+            return 0
+
     # Get Last Search
     def get_last_search(self):
         """Returns the last search option (returns defaults if none exist)."""
@@ -1161,6 +1247,7 @@ class NotepadPy(QMainWindow):
     def find_text_in_editor(self, editor, options):
         search_text = options["text"]
         match_case = options["match_case"]
+        match_whole_word = options.get("match_whole_word", False)
         wrap_around = options["wrap_around"]
         use_regex = options["use_regex"]
         forward = options["direction"] == "down"
@@ -1177,7 +1264,10 @@ class NotepadPy(QMainWindow):
             if use_regex:
                 pattern = re.compile(search_text, flags)
             else:
-                pattern = re.compile(re.escape(search_text), flags)
+                escaped_text = re.escape(search_text)
+                if match_whole_word:
+                    escaped_text = r'\b' + escaped_text + r'\b'
+                pattern = re.compile(escaped_text, flags)
 
             match = None
 
