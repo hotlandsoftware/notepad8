@@ -3,7 +3,7 @@ set -e
 echo "Building Notepad8..."
 rm -rf dist build AppDir *.AppImage
 
-pyinstaller --name "NotepadPypp" \
+pyinstaller --name "np8" \
     --hidden-import=PyQt6.Qsci \
     --hidden-import=PyQt6.QtPrintSupport \
     --hidden-import=PyQt6.QtNetwork \
@@ -16,7 +16,7 @@ mkdir -p AppDir/usr/bin
 mkdir -p AppDir/usr/share/applications
 mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
 
-cp -r dist/NotepadPypp/* AppDir/usr/bin/
+cp -r dist/np8/* AppDir/usr/bin/
 
 cat > AppDir/notepadpypp.desktop << 'EOF'
 [Desktop Entry]
@@ -47,7 +47,7 @@ export LD_LIBRARY_PATH="${HERE}/usr/lib:${LD_LIBRARY_PATH}"
 export QT_PLUGIN_PATH="${HERE}/usr/bin/PyQt6/Qt6/plugins"
 
 cd "${HERE}/usr/bin"
-exec "${HERE}/usr/bin/NotepadPypp" "$@"
+exec "${HERE}/usr/bin/np8" "$@"
 EOF
 
 chmod +x AppDir/AppRun
